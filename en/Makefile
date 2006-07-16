@@ -1,6 +1,6 @@
 # This makefile requires GNU make.
 
-hg_id := $(shell hg parents --template '{node|short}' | head -1)
+hg_id := $(shell hg parents --template '{node|short}\n' | head -1)
 
 sources := \
 	00book.tex \
@@ -110,7 +110,7 @@ examples/.run: $(example-sources)
 	cd examples && ./run-example
 
 build_id.tex: $(wildcard ../.hg/00changelog.[id])
-	echo $(hg_id) > build_id.tex
+	echo -n $(hg_id) > build_id.tex
 
 clean:
 	rm -rf beta html pdf *.eps *.pdf *.png *.aux *.dvi *.log *.out \
