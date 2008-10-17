@@ -1,0 +1,38 @@
+= Organización del Trabajo. =
+
+ * Se mantienen los nombres de los archivos
+ * Se traduce solamente el contenido
+ * Copie los archivos de en a es y tradúzcalos
+ * Las gráficas son tan importantes como los archivos
+ de texto, si lo desea, comience por las gráficas,
+ especialmente los .dot resultan sencillos para traducir.
+
+= Traducción/Revisión =
+
+En esta sección indicamos quienes están traduciendo
+y quienes revisando lo traducido. Coloque su nombre 
+para que los demás colaboradores sepan en dónde 
+enfocar sus esfuerzos.  En este momento estamos dejando 
+que *make* nos guíe.
+
+== Traducción ==
+ branch.tex : Igor Támara
+Su elección aquí
+
+== Revisión ==
+Su elección aquí
+
+= Unificación de Términos de Traducción =
+Por favor mantenga esta lista en orden alfabético
+
+ Branch: Rama
+ Bug: Fallo
+ Command: Orden
+ Milestone: Etapa
+ Release: Versión o liberación de versión
+
+= Traductores =
+Por favor mantenga esta lista en orden alfabético
+ * Igor Támara <igor@tamarapatino.org>
+ * Javier Rojas <jerojasro@devnull.li>
+ * Su nombre <su@e.mail>
