@@ -1,0 +1,408 @@
+\chapter{Administración de Versiones y desarrollo ramificado}
+\label{chap:branch}
+
+Mercurial ofrece varios mecanismos que le permitirán administrar un
+proyecto que avanza en múltiples frentes simultáneamente. Para
+entender estos mecanismos, demos un vistazo a la estructura usual de
+un proyecto de software.
+
+Muchos proyectos de software liberan una versión``mayor'' que contiene
+nuevas características substanciales.  En paralelo, pueden liberar
+versiones ``menores''.   Estas usualmente son idénticas a las
+versiones mayores en las cuales están basadas, pero con arreglo de
+algunos fallos.
+
+En este capítulo, comenzaremos hablando de cómo mantener registro de
+las etapas del proyecto como las liberaciones de una
+versión. Continuaremos hablando del flujo de trabajo entre las
+diferentes fases de un proyecto, y como puede ayudar Mercurial a
+independizar y administrar tal trabajo.
+
+\section{Dar un nombre persistente a una revisión}
+
+Cuando se decide a otorgar a una revisión el nombre particular de una
+``versión'', es buena idea grabar la identidad para tal revisión.
+Lo cual permitirá reproducir tal versión en una fecha posterior, o el
+propósito que se considere en ese momento (reproducir un fallo, portar
+a una nueva plataforma, etc).
+\interaction{tag.init}
+
+Mercurial le permite dar un nombre permanente a cualquier revisión
+usando la orden \hgcmd{tag}.  Sin causa de sorpresa, esos nombres se llaman
+``tags''(etiquetas).
+\interaction{tag.tag}
+
+Un tag no es más que un ``nombre simbólico'' para una revisión.  Los
+tags existen únicamente para su conveniencia, dotándolo de una forma
+permanente y sencilla para referirse a una revisión; Mercurial no
+interpreta de ninguna manera los nombres de los tags que usted use.
+Mercurial tampoco impone restricción alguna al nombre de un tag, más
+allá de lo necesario para asegurar que un tag puede parsearse sin
+ambigüedades. El nombre de un tag no puede tener ninguno de los
+caracteres siguientes:
+\begin{itemize}
+\item Dos puntos (ASCII 58, ``\texttt{:}'')
+\item Retroceso (return) (ASCII 13, ``\Verb+\r+'')
+\item Nueva línea (ASCII 10, ``\Verb+\n+'')
+\end{itemize}
+
+Puede usar la orden \hgcmd{tags} para observar los tags presentes en
+su repositorio. Al desplegarse, cada revisión marcada se identifica
+primero con su nombre, después el número de revisión y finalmente con
+un hash único de la revisión.
+\interaction{tag.tags}
+Note que \texttt{tip} aparece en la lista de \hgcmd{tags}.  El tag
+\texttt{tip} es un tag ``flotante'' especial, que identifica siempre
+la revisión más nueva en el repositorio.
+
+Al desplegar la orden \hgcmd{tags}, los tags se listan en orden
+inverso, por número de revisión. Lo que significa usualmente que los
+tags más recientes se listan antes que los más antiguos. También
+significa que el tag \texttt{tip} siempre aparecerá como primer tag
+listado al desplegar la orden \hgcmd{tags}.
+
+Cuando ejecuta \hgcmd{log}, se desplegará la revisión que tenga los
+tags asociados a ella, se imprimirán tales tags.
+\interaction{tag.log}
+
+Siempre que requiera indicar un ~ID de revisión a una Orden de
+Mercurial, aceptará un nombre de tag en su lugar.  Internamente,
+Mercurial traducirá su nombre de tag en el ~ID de revisión
+correspondiente, y lo usará.
+\interaction{tag.log.v1.0}
+
+No hay límites en la cantidad de tags por reposirorio, o la cantidad
+de tags que una misma revisión pueda tener. Siendo prácticos, no es
+muy buena idea tener ``demasiados'' (la cantidad variará de un
+proyecto a otro), debido a que la intención es ayudarle a encontrar
+revisiones. Si tiene demasiados tags, la facilidad para identificar
+revisiones disminuirá rápidamente.
+
+Por ejemplo, si su proyecto tiene etapas(milestones) frecuentes en pocos
+días, es perfectamente razonable asignarle un tag a cada una de
+ellas. Pero si tiene un sistema de construcción automática de binarios
+que asegura que cada revisión puede generarse limpiamente, estaría
+introduciendo mucho ruido si se usara un tag para cada generación
+exitosa. Más bien, podría usar tags para generaciones fallidas (en
+caso de que estas sean raras!), o simplemente evitar los tags para
+llevar cuenta de la posibilidad de generación de binarios.
+
+
+Si desea eliminar un tag que no desea, use
+\hgcmdargs{tag}{--remove}.  
+\interaction{tag.remove}
+También puede modificar un tag en cualquier momento para que
+identifique una revisión distinta, basta con aplicar una nueva orden
+\hgcmd{tag}. Deberá usar la opción \hgopt{tag}{-f} para indicarle a
+Mercurial que desea actualizar el tag \emph{en serio}.
+\interaction{tag.replace}
+De todas maneras habrá un registro permanente de la antigua identidad
+del tag, pero Mercurial no la usará. Por lo tanto no hay castigo al
+marcar con un tag una revisión incorrecta; lo único que debe hacer es
+mover el tag hacia la revisión correcta tan pronto como localice el
+error.
+
+Mercurial almacena los tags en un archivo controlado por revisiones en
+su repositorio. Si ha creado tags, los encontrará en un archivo
+llamado \sfilename{.hgtags}.  Cuando invoca la orden \hgcmd{tag},
+Mercurial modifica este archivo, y automáticamente hace commit del
+cambio al mismo.  Esto significa que cada vez que ejecuta \hgcmd{tag},
+verá el conjunto de cambios correspondiente en la salida de \hgcmd{log}.
+\interaction{tag.tip}
+
+\subsection{Manejo de conflictos entre tags durante una fusión}
+
+Es usual no tener que preocuparse por el archivo \sfilename{.hgtags},
+pero aveces hace su aparición durante una fusión. El formato del
+archivo es sencillo: Consiste de una serie de líneas. Cada línea
+comienza con un hash de Conjunto de Cambios, seguido por un espacio,
+seguido por el nombre de un tag.
+
+Si está resolviendo un conflicto en el archivo \sfilename{.hgtags}
+durante una fusión, hay un detalle para tener en cuenta al modificar
+el archivo \sfilename{.hgtags}:
+cuando Mercurial parsea los tags en el repositorio \emph{nunca}
+lee la copia de trabajo del archivo \sfilename{.hgtags}.  En cambio,
+lee la versión \emph{consignada más reciente} del archivo.
+
+Una consecuencia desafortunada de este diseño es que usted no puede
+verificar que su archivo \sfilename{.hgtags} fusionado es correcto hasta
+\emph{después} de haber consignado(hecho commit). Así que si se
+encuentra resolviendo un conflicto en \sfilename{.hgtags} durante una
+fusión, asegúrese de ejecutar la orden \hgcmd{tags} después de
+consignar. Si encuentra un error en el archivo \sfilename{.hgtags}, 
+reportará el lugar del error, que podrá arreglar y después
+consignar. Posteriormente ejecute de nuevo la orden \hgcmd{tags} para
+asegurar que su arreglo fue correctamente aplicado.
+
+\subsection{Tags y clonado}
+
+Puede haber notado que la orden \hgcmd{clone} tiene la opción
+\hgopt{clone}{-r} que le permite clonar una copia exacta del
+repositorio hasta un conjunto de cambios específico. El nuevo clon no
+tendrá historia posterior a la revisión que usted haya
+especificado. Esta forma de interactuar puede sorprender a los
+desprevenidos.
+
+Recuerde que un tag se almacena como una revisión al archivo
+\sfilename{.hgtags}, consecuente con esto, cuando crea un tag, el
+conjunto de cambios en el cual este se almacena necesariamente se
+refiere a un conjunto de cambios anterior. Cuando ejecuta
+\hgcmdargs{clone}{-r foo} para clonar un repositorio hasta el tag
+\texttt{foo}, el nuevo clon \emph{no contendrá la historia que creo
+el tag} que usó para clonar el repositorio. El resultado es que tendrá
+exactamente el subconjunto correcto de la historia del proyecto en el
+nuevo repositorio, pero, \emph{no} el tag que podría haber esperado.
+
+\subsection{Cuando los tags permanentes son demasiado}
+
+Dado que los tags de Mercurial están controlados por revisiones y se
+llevan en la historia del proyecto, todas las personas involucradas
+verán los tags que usted haya creado. El hecho de dar nombres a las
+revisiones tiene usos más allá que simplemente hacer notar que la
+revisión \texttt{4237e45506ee} es realmente \texttt{v2.0.2}.  Si está
+tratando de encontrar un bug sutil, posiblemente desearía colocar un
+tag recordándole algo como ``Ana vió los síntomas con esta revisión''.
+
+Para estos casos, lo que posiblemente desearía serían tags
+\emph{locales}. Puede crear un tag local con la opción \hgopt{tag}{-l}
+de la orden \hgcmd{tag}.  Esto guardará el tag en un archivo llamado
+\sfilename{.hg/localtags}.  A diferencia de \sfilename{.hgtags},
+\sfilename{.hg/localtags} no está controlado por revisiones.
+Cualquier tag que usted cree usando \hgopt{tag}{-l} se mantendrá
+localmente en el repositorio en el que esté trabajando en ese momento.
+
+\section{El flujo de cambios---El gran cuadro vs. el pequeño}
+
+Retomando lo mencionado en el comienzo de un capítulo, pensemos en el
+hecho de que un proyecto tiene muchas piezas concurrentes de trabajo
+en desarrollo al mismo tiempo.
+
+Puede haber prisa por una nueva versión ``principal''; Un nueva
+versión con un rreglo de fallo a la última versión; y una versión de
+``mantenimiento correctivo'' a una versión antigua que ha entrado en
+modo de mantenimiento.
+
+Usualmente la gente se refiere a esas direcciones
+concurrentes de desarrollo es como ``ramas''.  Aunque hemos visto que
+en variadas ocasiones Mercurial trata a \emph{toda la historia} como
+una serie de ramas y fusiones.  Realmente lo que tenemos aquí es dos
+ideas que se relacionan periféricamente, pero que en esencia comparten
+un nombre.
+\begin{itemize}
+\item ``El gran cuadro'' Las ramas representan un barrido de la
+  evolución del proyecto; la gente les da nombres y hablan acerca de
+  ellas en sus conversaciones.
+\item ``El cuadro pequeño'' Las ramas son artefactos de las
+  actividades diarias de al desarrollar y fusionar cambios. Exponen la
+  narrativa de cómo se desarrolló el código.
+\end{itemize}
+
+\section{Administrar ramas en repositorios estilo gran cuadro}
+
+En Mercurial la forma más sencilla de aislar una rama del ``gran
+cuadro'' es a través de un repositorio dedicado.  Si cuenta con un
+repositorio compartido existente ---llamémoslo
+\texttt{myproject}---que alcanzó la etapa ``1.0'', puede comenzar a
+prepararse para versiones de mantenimiento futuras a partir de la
+versión~1.0 marcando con un tag en la revisión con la cual preparó la versión~1.0.
+\interaction{branch-repo.tag}
+Ahora puede clonar un repositorio compartido nuevo
+\texttt{myproject-1.0.1} con tal tag.
+\interaction{branch-repo.clone}
+
+Posteriormente, si alguien necesita trabajar en la reparación de un
+fallo debería dirigirse a la liberación de versión~1.0.1 que viene en
+camino, ellos clonarían el repositorio \texttt{myproject-1.0.1},
+harían sus cambios y los publicarían(con push).
+\interaction{branch-repo.bugfix}
+Mientras tanto, el desarrollo para la siguiente versión mayor puede
+continuar asilada e incólume, en el repositorio \texttt{myproject}.
+\interaction{branch-repo.new}
+
+\section{No repita trabajo: fusión entre ramas}
+
+En muchos casos, cuando tiene un fallo para arreglar en una rama de
+mantenimiento, es muy probable que el fallo esté también en la rama
+principal( y posiblemente en otras ramas de mantenimiento
+también). Solamente un desarrollador extraño desearía corregir el
+mismo fallo muchas veces, por tanto, veremos varias alternativas con
+las que Mercurial puede ayudarle a administrar tales arreglos de fallo
+sin duplicar su trabajo.
+
+En el caso más sencillo, basta con jalar los cambios de la rama de
+mantenimiento a la rama obetivo en su clon local.
+\interaction{branch-repo.pull}
+A continuación deberá mezclar las cabezas de las dos ramas, y publicar
+de nuevo a la rama principal.
+\interaction{branch-repo.merge}
+
+\section{Nombrar ramas dentro de un repositorio}
+
+La aproximación correcta en casi todas las oportunidades es aislar las
+ramas en los repositorios.  Es fácil de entender gracias a su
+facilidad; y es difícil cometer errores. Hay una relación uno a uno
+entre las ramas y los directorios con los que está trabajando en su
+sistema. Esto le permite usar emplear herramientas usuales(para los
+nuevos a Mercurial) para trabajar con los archivos dentro de su
+rama/repositorio.
+
+Si se encuentra más en la categoría ``usuario diestro'' (\emph{y} sus
+colaboradores también), puede considerar otra alternativa para
+administrar las ramas. He mencionador con anterioridad la distinción a
+nivel humano entre las ramas estilo ``cuadro pequeño'' y ``gran
+cuadro''.  Mientras que Mercurial trabaja con muchas ramas del estilo
+``cuadro pequeño'' en el repositorio todo el tiempo(por ejemplo cuando
+usted jala cambios, pero antes de fusionarlos), \emph{también} puede
+trabajar con varias ramas del ``cuadro grande''.
+
+El truco para trabajar de esta forma en Mercurial se logra gracias a
+que puede asignar un \emph{nombre} persistente a una rama.  Siempre
+existe una rama llamada \texttt{default}.  Incluso antes de que
+empiece a nombrar ramas por su cuenta, puede encontrar indicios de la
+rama \texttt{default} si los busca.
+
+Por ejemplo, cuando invoca la orden \hgcmd{commit}, y se lanza su
+editor para introducir el mensaje de la consignación, busque la línea
+que contiene el texto ``\texttt{HG: branch default}'' al final. Le
+está indicando que su consignación ocurrirá en la rama llamada 
+\texttt{default}.
+
+Use la orden \hgcmd{branches} para comenzar a trabajar con ramas
+nombradas. Esta orden mostrará las ramas presentes en su repositorio,
+indicándole en qué conjunto de cambios está cada una.
+\interaction{branch-named.branches}
+Dado que todavía no ha creado ramas nombradas, la única que verá sería
+\texttt{default}.
+
+Para hallar cuál es la rama ``actual'', invoque la orden
+\hgcmd{branch}, sin argumento alguno. Le informará en qué rama se
+encuentra el padre del conjunto actual de cambios.
+\interaction{branch-named.branch}
+
+Para crear una nueva rama, invoque la orden \hgcmd{branch} de
+nuevo. En esta oportunidad, ofrezca un argumento: el nombre de la rama
+que desea crear.
+\interaction{branch-named.create}
+
+Después de crear la rama, usted podría desear ver el efecto que tuvo
+la orden \hgcmd{branch}.  ¿Qué reportan las ordenes \hgcmd{status} y
+\hgcmd{tip} commands report?
+\interaction{branch-named.status}
+Nada cambia en el directorio actual, y no se ha añadido nada a la
+historia. Esto sugiere que al ejecutar la orden \hgcmd{branch} no hay
+un efecto permanente; solamente le indica a que nombre de rama usará
+la \emph{próxima} vez que consigne un conjunto de cambios.
+
+Cuando consigna un cambio, Mercurial alamacena el nombre de la rama en
+la cual consignó.  Una vez que haya cambiado de la rama \texttt{default}
+y haya consignado, verá que el nombre de la nueva rama se mostrará
+cuando use la orden \hgcmd{log}, \hgcmd{tip}, y otras órdenes que
+desplieguen la misma clase de información.
+\interaction{branch-named.commit}
+Las órdenes del tipo \hgcmd{log} imprimirán el nombre de la rama de
+cualquier conjunto de cambios que no estén en la rama
+\texttt{default}. Como resultado, si nunca usa ramas nombradas, nunca
+verá esta información.
+
+Una vez que haya nombrado una rama y consignado un cambio con ese
+nombre, todas las consignaciones subsecuentes que desciendan de ese
+cambio heredarán el mismo nombre de rama. Puede cambiar el nombre de
+una rama en cualquier momento con la orden \hgcmd{branch}.  
+\interaction{branch-named.rebranch}
+Esto es algo que no hará muy seguido en la práctica, debido que los
+nombres de las ramas tienden a tener vidas largas.  (Esto no es una
+regla, solamente una observación.)
+
+\section{Tratamiento de varias ramas nombradas en un repositorio}
+
+Si tiene más de una rama nombrada en un repositorio, Mercurial
+recordará la rama en la cual está su directorio de trabajo cuando
+invoque una orden como \hgcmd{update} o \hgcmdargs{pull}{-u}.  Se
+actualizará su directorio de trabajo actual al tip de esta rama, sin
+importar cuál sea el tip ``a lo largo del repositorio'' .  Para
+actualiar a una revisión que está en una rama con distinto nombre,
+puede necesitar la opción \hgopt{update}{-C} de \hgcmd{update}.
+
+Este comportamiento puede ser sutil, veámoslo en acción.  Primero,
+recordemos en qué rama estamos trabajando, y qué ramas están en
+nuestro repositorio.
+\interaction{branch-named.parents}
+Estamos en la rama \texttt{bar}, pero existe otra rama más antigua
+llamada \hgcmd{foo}.
+
+Podemos hacer \hgcmd{update} entre los tipos de las ramas \texttt{foo}
+y \texttt{bar} sin necesidad de usar la opción \hgopt{update}{-C},
+puesto que esto solamente implica ir linealmente hacia adelante y
+atrás en nuestra historia de cambios.
+\interaction{branch-named.update-switchy}
+
+Si volvemos a la rama \texttt{foo} e invocamos la orden \hgcmd{update},
+nos mantendrá en \texttt{foo}, sin movernos al tipo de \texttt{bar}.
+\interaction{branch-named.update-nothing}
+
+Al consignar un cambio a la rama \texttt{foo} se introducirá una nueva
+cabeza.
+\interaction{branch-named.foo-commit}
+
+\section{Nombres de ramas y fusiones}
+
+Posiblemente ha notado que las fusiones en Mercurial no son simétricas.
+Supongamos que su repositorio tiene dos cabezas, 17 and 23.  Si yo invoco
+\hgcmd{update} a 17 y aplico \hgcmd{merge} a 23, Mercurial almacena 17
+como el primer padre de la fusión, y 23 como el segundo. Mientras que
+si hago \hgcmd{update} a 23 y después aplico \hgcmd{merge} con 17,
+grabará a 23 como el primer padre, y 17 como el segundo.
+
+Esto afecta com elige Mercurial el nombre de la rama cuando hace
+fusión.  Después de una fusión Mercurial mantendrá el nombre de la
+rama del primer padre cuando consigne el resultado de una fusión.  Si
+el primer nombre de su padre es \texttt{foo}, y fusiona con
+\texttt{bar}, el nombre de la rama continuará siendo \texttt{foo}
+después de fusionar.
+
+No es inusual que un repositorio contenga varias cabezas, cada una con
+el mismo nombre de rama.  Digamos que estoy trabajando en la rama
+\texttt{foo}, y usted también.  Consignamos cambios distintos; Yo jalo
+sus cambios; Ahora tengo dos cabezas, cada una afirmando estar en la
+rama \texttt{foo}.  El resultado de una fusión será una única cabeza
+en la rama \texttt{foo} como usted esperaría.
+
+Pero si estoy trabajando en la rama \texttt{bar}, y fusiono el trabajo
+desde la rama \texttt{foo}, el resultado permanecerá en la rama
+\texttt{bar}.
+\interaction{branch-named.merge}
+
+En un ejemplo más concreo, si yo estoy trabajando en la rama
+\texttt{bleeding-edge}, y deseo traer los arreglos más recientes de la
+rama \texttt{estable}, Mercurial elegirá el nombre de rama ``correcto''
+(\texttt{bleeding-edge}) cuando yo jale una fusión desde \texttt{estable}.
+
+\section{Normalmente es útil nombrar ramas}
+
+No debería considerar que las ramas nombradas son aplicables
+únicamente en situaciones con muchas ramas de larga-vida cohabitando
+en un mismo repositorio.  Son muy útiles incluso en los casos de
+una-rama-por-repositorio.
+
+En el caso más sencillo, dar un nombre a cada rama ofrece un registro
+permanente acerca de en qué conjunto de cambios se generó la rama.
+Esto le ofrece más contexto cuando esté tratando de seguir la
+historia de un proyecto ramificado de larga vida.
+
+Si está trabajando con repositorios compartidos, puede configurar el gancho
+\hook{pretxnchangegroup} para que cada uno bloquee los cambios con
+nombres de rama ``incorrectos'' que están por adicionarse.  Este
+provee una defensa sencilla pero efectiva para evitar que la gente
+accidentalmente publique cambios de una rama ``super nueva'' a la rama
+``estable''.  Tal gancho podría verse de la siguiente forma dentro de
+un repositorio compartido de \hgrc.
+\begin{codesample2}
+  [hooks]
+  pretxnchangegroup.branch = hg heads --template '{branches} ' | grep mybranch
+\end{codesample2}
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "00book"
+%%% End: 

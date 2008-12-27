@@ -1,0 +1,1452 @@
+\chapter{Manejo de eventos en repositorios mediante ganchos}
+\label{chap:hook}
+
+Mercurial ofrece un poderoso mecanismo para permitirle a usted
+automatizar la ejecución de acciones en respuesta a eventos que
+ocurran en un repositorio. En algunos casos, usted puede controlar
+incluso la respuesta de Mercurial a dichos eventos.
+
+Mercurial usa el término \emph{gancho} para identificar estas
+acciones. Los ganchos son conocidos como ``disparadores'' en algunos
+sistemas de control de revisiones, pero los dos nombres se refieren al
+mismo concepto.
+
+\section{Vistazo general de ganchos en Mercurial}
+
+A continuación se encuentra una breve lista de los ganchos que
+Mercurial soporta. Volveremos a cada uno de estos ganchos con más
+detalle después, en la sección~\ref{sec:hook:ref}.
+
+\begin{itemize}
+\item[\small\hook{changegroup}] Es ejecutado luego de que un grupo de
+    conjuntos de cambios ha sido traído al repositorio desde algún
+    otro sitio.
+\item[\small\hook{commit}] Es ejecutado después de la creación de
+    un conjunto de cambios en el repositorio local.
+\item[\small\hook{incoming}] Es ejecutado una vez por cada conjunto de
+    cambios traído al repositorio desde otra ubicación. Note la
+    diferencia respecto al gancho \hook{changegroup}, que es ejecutado
+    una vez por cada \emph{grupo} de conjuntos de cambios que se
+    traiga.
+\item[\small\hook{outgoing}] Es ejecutado luego de que un grupo de
+    conjuntos de cambios ha sido transmitido desde el repositorio.
+\item[\small\hook{prechangegroup}] Es ejecutado antes de iniciar la
+    recepción de un grupo de conjuntos de cambios en el repositorio.
+\item[\small\hook{precommit}] De control. Es ejecutado antes de
+    iniciar una consignación.
+\item[\small\hook{preoutgoing}] De control. Es ejecutado antes de
+    iniciar la transmisión de un grupo de conjuntos de cambios desde
+    el repositorio.
+\item[\small\hook{pretag}] De control. Es ejecutado antes de crear una
+    etiqueta.
+\item[\small\hook{pretxnchangegroup}] De control. Es ejecutado después
+    de haber recibido un grupo de conjuntos de cambios en el
+    repositorio local, pero antes de que la transacción se complete y
+    los cambios sean permanentes dentro del repositorio.
+\item[\small\hook{pretxncommit}] De control. Es ejecutado luego de la
+    creación de un conjunto de cambios en el repositorio local, pero
+    antes de que la transacción que hace permanente el cambio sea
+    completada.
+\item[\small\hook{preupdate}] De control. Es ejecutado antes de
+    iniciar una actualización o fusión en el directorio de trabajo.
+\item[\small\hook{tag}] Es ejecutado después de la creación de una
+    etiqueta.
+\item[\small\hook{update}] Es ejecutado después de que termina una
+    actualización o una fusión.
+\end{itemize}
+Cada uno de los ganchos cuya descripción empieza con la frase
+``de control'' tiene la facultad de determinar si una actividad puede
+continuar. Si el gancho se ejecuta con éxito, la actividad puede
+continuar; si falla, o bien la actividad no es permitida, o se
+deshacen los cambios que se puedan haber llevado a cabo, dependiendo
+del gancho involucrado.
+
+\section{Ganchos y seguridad}
+
+\subsection{Los ganchos se ejecutan con sus privilegios de usuario}
+
+Cuando usted ejecuta un comando de Mercurial en un repositorio, y el
+comando causa la ejecución de un gancho, dicho gancho se ejecuta en
+\emph{su} sistema, en \emph{su} cuenta de usuario, con \emph{sus}
+privilegios. Ya que los ganchos son elementos arbitrarios de código
+ejecutable, usted debería tratarlos con un nivel adecuado de
+desconfianza. No instale un gancho a menos en que confíe en quien lo
+creó y en lo que el gancho hace.
+
+En algunos casos, usted puede estar expuesto a ganchos que usted no
+%TODO acá introduzco algo de texto por mi cuenta, por claridad
+instaló. Si usted usa Mercurial en un sistema extraño, tenga en cuenta
+que Mercurial ejecutará los ganchos definidos en el fichero \hgrc.
+
+Si está trabajando con un repositorio propiedad de otro usuario,
+Mercurial podrá ejecutar los ganchos definidos en el repositorio de
+dicho usuario, pero los ejecutará como ``usted''. Por ejemplo, si
+usted jala (\hgcmd{pull}) desde ese repositorio, y el
+\sfilename{.hg/hgrc} define un gancho saliente (\hook{outgoing}),
+dicho gancho se ejecuta bajo su cuenta de usuario, aun cuando usted no
+es el propietario del repositorio.
+
+\begin{note}
+  Esto sólo aplica si usted está jalando desde un repositorio en un
+  sistema de ficheros local o de red. Si está jalando a través de http
+  o ssh, cualquier gancho saliente (\hook{outgoing}) se ejecutará bajo
+  la cuenta que está ejecutando el proceso servidor, en el servidor.
+\end{note}
+
+XXX Para ver qué ganchos han sido definidos en un repositorio, use el
+comando \hgcmdargs{config}{hooks}. Si usted está trabajando en un
+repositorio, pero comunicándose con otro que no le pertenece
+(por ejemplo, usando \hgcmd{pull} o \hgcmd{incoming}), recuerde que
+los ganchos que debe considerar son los del otro repositorio, no los
+del suyo.
+
+\subsection{Los ganchos no se propagan}
+
+En Mercurial, no se hace control de revisiones de los ganchos, y no se
+propagan cuando usted clona, o jala de, un repositorio. El motivo para
+esto es simple: un gancho es código ejecutable arbitrario. Se ejecuta
+bajo su identidad, con su nivel de privilegios, en su máquina.
+
+Sería extremadamente descuidado de parte de cualquier sistema
+distribuido de control de revisiones el implementar control de
+revisiones para ganchos, ya que esto ofrecería maneras fácilmente
+%TODO subvertir
+aprovechables de subvertir las cuentas de los usuarios del sistema de
+control de revisiones.
+
+Ya que Mercurial no propaga los ganchos, si usted está colaborando con
+otras personas en un proyecto común, no debería asumir que ellos están
+usando los mismos ganchos para Mercurial que usted usa, o que los de
+ellos están configurado correctamente. Usted debería documentar los
+ganchos que usted espera que la gente use.
+
+En una intranet corporativa, esto es algo más fácil de manejar, ya que
+usted puede, por ejemplo, proveer una instalación ``estándar'' de
+Mercurial en un sistema de ficheros NFS, y usar un fichero \hgrc\
+global para definir los ganchos que verán todos los usuarios. Sin
+embargo, este enfoque tiene sus límites; vea más abajo.
+
+\subsection{Es posible hacer caso omiso de los ganchos}
+
+Mercurial le permite hacer caso omiso de la deficinión de un gancho,
+a través de la redefinición del mismo. Usted puede deshabilitar el
+gancho fijando su valor como una cadena vacía, o cambiar su
+comportamiento como desee.
+
+Si usted instala un fichero \hgrc\ a nivel de sistema o sitio completo
+que define algunos ganchos, debe entender que sus usuarios pueden
+deshabilitar o hacer caso omiso de los mismos.
+
+\subsection{Asegurarse de que ganchos críticos sean ejecutados}
+
+Algunas veces usted puede querer hacer respetar una política, y no
+permitir que los demás sean capaces de evitarla. Por ejemplo, usted
+puede tener como requerimiento que cada conjunto de cambios debe pasar
+un riguroso conjunto de pruebas. Definir este requerimientos a través
+de un gancho en un fichero \hgrc\ global no servirá con usuarios
+remotos en computadoras portátiles, y por supuesto que los usuarios
+locales pueden evitar esto a voluntad haciendo caso omiso del gancho.
+
+En vez de eso, usted puede definir las políticas para usar Mercurial
+de tal forma que se espere que los usuarios propaguen los cambios a
+través de un servidor ``canónico'' bien conocido que usted ha
+asegurado y configurado apropiadamente.
+
+Una manera de hacer esto es a través de una combinación de ingeniería
+socual y tecnología. Cree una cuenta de acceso restringido; los
+usuarios pueden empujar cambios a través de la red a los repositorios
+administrados por esta cuenta, pero no podrán ingresar a dicha cuenta
+para ejecutar órdenes en el intérprete de comandos. En este escenario,
+un usuario puede enviar un conjunto de cambios que contenga la
+porquería que él desee.
+
+Cuando alguien empuja un conjunto de cambios al servidor del que todos
+jalan, el servidor probará el conjunto de cambios antes de aceptarlo
+como permanente, y lo rechazará si no logra pasar el conjunto de
+pruebas. Si la gente sólo jala cambios desde este servidor de filtro,
+servirá para asegurarse de que todos los cambios que la gente jala han
+sido examinados automáticamente
+
+\section{Precauciones con ganchos \texttt{pretxn} en un repositorio de
+acceso compartido}
+
+Si usted desea usar ganchos para llevar a cabo automáticamente algún
+trabajo en un repositorio al que varias personas tienen acceso
+compartido, debe tener cuidado con la forma de hacerlo.
+
+Mercurial sólo bloquea un repositorio cuando está escribiendo al
+mismo, y sólo las partes de Mercurial que escriben al repositorio le
+prestan atención a los bloqueos. Los bloqueos de escritura son
+necesarios para evitar que múltiples escritores simultáneos
+interfieran entre sí, corrompiendo el repositorio.
+
+Ya que Mercurial tiene cuidado con el orden en que lee y escribe
+datos, no necesita adquirir un bloqueo cuando desea leer datos del
+repositorio. Las partes de Mercurial que leen del repositorio nunca le
+prestan atención a los bloqueos. Este esquema de lectura libre de
+bloqueos incremententa en gran medida el desempeño y la concurrencia.
+
+Sin embargo, para tener un gran desempeño es necesario hacer
+sacrificios, uno de los cuales tiene el potencial de causarle
+problemas a menos de que usted esté consciente de él. Describirlo
+requiere algo de detalle respecto a cómo Mercurial añade conjuntos de
+cambios al repositorio y cómo lee esos cambios de vuelta.
+
+Cuando Mercurial \emph{escribe} metadatos, los escribe directamente en
+el fichero de destino. Primero escribe los datos del fichero, luego
+los datos del manifiesto (que contienen punteros a los nuevos datos
+del fichero), luego datos de la bitácora de cambios (que contienen
+punteros a los nuevos datos del manifiesto). Antes de la primera
+escritura a cada fichero, se guarda un registro de dónde estaba el
+final de fichero en su registro de transacciones. Si la transacción
+debe ser deshecha, Mercurial simplemente trunca cada fichero de vuelta
+al tamaño que tenía antes de que empezara la transacción.
+
+Cuando Mercurial \emph{lee} metadatos, lee la bitácora de cambios
+primero, y luego todo lo demás. Como un lector sólo accederá a las
+partes del manifiesto o de los metadatos de fichero que él puede ver
+en la bitácora de cambios, nunca puede ver datos parcialmente
+escritos.
+
+Algunos ganchos de control (\hook{pretxncommit} y
+\hook{pretxnchangegroup}) se ejecutan cuando una transacción está casi
+completa. Todos los metadatos han sido escritos, pero Mercurial aún
+puede deshacer la transacción y hacer que los datos recién escritos
+desaparezcan.
+
+Si alguno de estos ganchos permanece en ejecución por mucho tiempo,
+abre una ventana de tiempo en la que un lector puede ver los metadatos
+de conjuntos de cambios que aún no son permanentes y que no debería
+considerarse que estén ``realmante ahí''. Entre más tiempo tome la
+ejecución del gancho, más tiempo estará abierta esta ventana.
+
+\subsection{Ilustración del problema}
+
+En principio, un buen uso del gancho \hook{pretxnchangegroup} sería
+ensamblar y probar automáticamente todos los cambios entrantes antes
+de que sean aceptados en un repositorio central. Esto le permitiría a
+usted garantizar que nadie pueda empujar cambios que ``rompan el
+ensamblaje''. Pero si un cliente puede jalar cambios mientras están
+siendo probados, la utilidad de esta prueba es nula; alguien confiado
+puede jalar cambios sin probar, lo que potencialmente podría romper su
+proceso de ensamblaje.
+
+La respuesta técnica más segura frente a este retos es montar dicho
+repositorio ``guardián'' como \emph{unidireccional}. Permita que
+reciba cambios desde el exterior, pero no permita que nadie jale
+cambios de él (use el gancho \hook{preoutgoing} para bloquear esto).
+Configure un gancho \hook{changegroup} para que si el ensamblaje o
+prueba tiene éxito, el gancho empuje los nuevos cambios a otro
+repositorio del que la gente \emph{pueda} jalar.
+
+En la práctica, montar un cuello de botella centralizado como éste a
+menudo no es una buena idea, y la visibilidad de las transacciones no
+tiene nada que ver con el problema. A medida que el tamaño de un
+proyecto---y el tiempo que toma ensamblarlo y probarlo---crece, usted
+se acerca rápidamente a un límite con este enfoque ``pruebe antes de
+comprar'', en el que tiene más conjuntos de cambios a probar que
+tiempo para ocuparse de ellos. El resultado inevitable es frustración
+para todos los que estén involucrados.
+
+Una aproximación que permite manejar mejor el crecimiento es hacer que
+la gente ensamble y pruebe antes de empujar, y ejecutar el ensamble y
+pruebas automáticas centralmente \emph{después} de empujar, para
+asegurarse de que todo esté bien. La ventaja de este enfoque es que no
+impone un límite a la rata en la que un repositorio puede aceptar
+cambios.
+
+\section{Tutorial corto de uso de ganchos}
+\label{sec:hook:simple}
+
+Escribir un gancho para Mercurial es fácil. Empecemos con un gancho
+que se ejecute cuando usted termine un \hgcmd{commit}, y simplemente
+muestre el hash del conjunto de cambios que usted acaba de crear. El
+gancho se llamará \hook{commit}.
+
+\begin{figure}[ht]
+  \interaction{hook.simple.init}
+  \caption{Un gancho simple que se ejecuta al hacer la consignación de
+  un conjunto de cambios}
+  \label{ex:hook:init}
+\end{figure}
+
+Todos los ganchos siguen el patrón del ejemplo~\ref{ex:hook:init}.
+Usted puede añadir una entrada a la sección \rcsection{hooks} de su
+fichero \hgrc.  A la izquierda está el nombre del evento respecto al
+cual dispararse; a la derecha está la acción a llevar a cabo. Como
+puede ver, es posible ejecutar cualquier orden de la línea de comandos
+en un gancho. Mercurial le pasa información extra al gancho usando
+variables de entorno (busque \envar{HG\_NODE} en el ejemplo).
+
+\subsection{Llevar a cabo varias acciones por evento}
+
+A menudo, usted querrá definir más de un gancho para un tipo de evento
+particular, como se muestra en el ejemplo~\ref{ex:hook:ext}. 
+Mercurial le permite hacer esto añadiendo una \emph{extensión} al
+final del nombre de un gancho. Usted extiende el nombre del gancho
+%TODO Yuk, no me gusta ese "parada completa"
+poniendo el nombre del gancho, seguido por una parada completa (el
+caracter ``\texttt{.}''), seguido de algo más de texto de su elección.
+Por ejemplo, Mercurial ejecutará tanto \texttt{commit.foo} como
+\texttt{commit.bar} cuando ocurra el evento \texttt{commit}.
+
+\begin{figure}[ht]
+  \interaction{hook.simple.ext}
+  \caption{Definición de un segundo gancho \hook{commit}}
+  \label{ex:hook:ext}
+\end{figure}
+
+Para dar un orden bien definido de ejecución cuando hay múltiples
+ganchos definidos para un evento, Mercurial ordena los ganchos de
+acuerdo a su extensión, y los ejecuta en dicho orden. En el ejemplo de
+arribam \texttt{commit.bar} se ejecutará antes que
+\texttt{commit.foo}, y \texttt{commit} se ejecutará antes de ambos.
+
+Es una buena idea usar una extensión descriptiva cuando usted define
+un gancho. Esto le ayudará a recordar para qué se usa el gancho. Si el
+gancho falla, usted recibirá un mensaje de error que contiene el
+nombre y la extensión del gancho, así que usar una extensión
+descriptiva le dará una pista inmediata de porqué el gancho falló (vea
+un ejemplo en la sección~\ref{sec:hook:perm}).
+
+\subsection{Controlar cuándo puede llevarse a cabo una actividad}
+\label{sec:hook:perm}
+
+En los ejemplos anteriores, usamos el gancho \hook{commit}, que es
+ejecutado después de que se ha completado una consignación. Este es
+uno de los varios ganchos que Mercurial ejecuta luego de que una
+actividad termina. Tales ganchos no tienen forma de influenciar la
+actividad como tal.
+
+Mercurial define un número de eventos que ocurren antes de que una
+actividad empiece; o luego de que empiece, pero antes de que termine.
+Los ganchos que se disparan con estos eventos tienen la capacidad
+adicional de elegir si la actividad puede continuar, o si su ejecución
+es abortada.
+
+El gancho \hook{pretxncommit} se ejecuta justo antes de que una
+consignación se ejecute. En otras palabras, los metadatos que
+representan el conjunto de cambios han sido escritos al disco, pero no
+se ha terminado la transacción. El gancho \hook{pretxncommit} tiene la
+capacidad de decidir si una transacción se completa, o debe
+deshacerse.
+
+Si el gancho \hook{pretxncommit} termina con un código de salida de
+cero, se permite que la transacción se complete; la consignación
+termina; y el gancho \hook{commit} es ejecutado. Si el gancho
+\hook{pretxncommit} termina con un código de salida diferente de cero,
+la transacción es revertida; los metadatos representando el conjunto
+de cambios son borrados; y el gancho \hook{commit} no es ejecutado.
+
+\begin{figure}[ht]
+  \interaction{hook.simple.pretxncommit}
+  \caption{Uso del gancho \hook{pretxncommit} hook to control commits}
+  \label{ex:hook:pretxncommit}
+\end{figure}
+
+El gancho en el ejemplo~\ref{ex:hook:pretxncommit} revisa si el
+mensaje de consignación contiene el ID de algún fallo. Si lo contiene,
+la consignación puede continuar. Si no, la consignación es cancelada.
+
+\section{Escribir sus propios ganchos}
+
+Cuando usted escriba un gancho, puede encontrar útil el ejecutar
+Mercurial o bien pasándole la opción \hggopt{-v}, o con el valor de
+configuración \rcitem{ui}{verbose} fijado en ``true'' (verdadero).
+Cuando lo haga, Mercurial imprimirá un mensaje antes de llamar cada
+gancho.
+
+\subsection{Escoger cómo debe ejecutarse su gancho}
+\label{sec:hook:lang}
+
+Usted puede escribir un gancho que funcione como un programa normal
+---típicamente un guión de línea de comandos---o como una función de
+Python que se ejecuta dentro del proceso Mercurial.
+
+Escribir un gancho como un programa externo tiene la ventaja de que no
+requiere ningún conocimiento del funcionamiento interno de Mercurial.
+Usted puede ejecutar comandos Mercurial normales para obtener la
+informción extra que pueda necesitar. La contraparte de esto es que
+los ganchos externos son más lentos que los ganchos internos
+ejecutados dentro del proceso.
+
+Un gancho Python interno tiene acceso completo a la API de Mercurial,
+y no se ``externaliza'' a otro proceso, así que es inherentemente más
+rápido que un gancho externo. Adicionalmente es más fácil obtener la
+mayoría de la información que un gancho requiere a través de llamadas
+directas a la API de Mercurial que hacerlo ejecutando comandos
+Mercurial.
+
+Si se siente a gusto con Python, o requiere un alto desempeño,
+escribir sus ganchos en Python puede ser una buena elección. Sin
+embargo, cuando usted tiene un gancho bastante directo por escribir y
+no le importa el desempeño (el caso de la mayoría de los ganchos), es
+perfectamente admisible un guión de línea de comandos.
+
+\subsection{Hook parameters}
+\label{sec:hook:param}
+
+Mercurial calls each hook with a set of well-defined parameters.  In
+Python, a parameter is passed as a keyword argument to your hook
+function.  For an external program, a parameter is passed as an
+environment variable.
+
+Whether your hook is written in Python or as a shell script, the
+hook-specific parameter names and values will be the same.  A boolean
+parameter will be represented as a boolean value in Python, but as the
+number 1 (for ``true'') or 0 (for ``false'') as an environment
+variable for an external hook.  If a hook parameter is named
+\texttt{foo}, the keyword argument for a Python hook will also be
+named \texttt{foo}, while the environment variable for an external
+hook will be named \texttt{HG\_FOO}.
+
+\subsection{Hook return values and activity control}
+
+A hook that executes successfully must exit with a status of zero if
+external, or return boolean ``false'' if in-process.  Failure is
+indicated with a non-zero exit status from an external hook, or an
+in-process hook returning boolean ``true''.  If an in-process hook
+raises an exception, the hook is considered to have failed.
+
+For a hook that controls whether an activity can proceed, zero/false
+means ``allow'', while non-zero/true/exception means ``deny''.
+
+\subsection{Writing an external hook}
+
+When you define an external hook in your \hgrc\ and the hook is run,
+its value is passed to your shell, which interprets it.  This means
+that you can use normal shell constructs in the body of the hook.
+
+An executable hook is always run with its current directory set to a
+repository's root directory.
+
+Each hook parameter is passed in as an environment variable; the name
+is upper-cased, and prefixed with the string ``\texttt{HG\_}''.
+
+With the exception of hook parameters, Mercurial does not set or
+modify any environment variables when running a hook.  This is useful
+to remember if you are writing a site-wide hook that may be run by a
+number of different users with differing environment variables set.
+In multi-user situations, you should not rely on environment variables
+being set to the values you have in your environment when testing the
+hook.
+
+\subsection{Telling Mercurial to use an in-process hook}
+
+The \hgrc\ syntax for defining an in-process hook is slightly
+different than for an executable hook.  The value of the hook must
+start with the text ``\texttt{python:}'', and continue with the
+fully-qualified name of a callable object to use as the hook's value.
+
+The module in which a hook lives is automatically imported when a hook
+is run.  So long as you have the module name and \envar{PYTHONPATH}
+right, it should ``just work''.
+
+The following \hgrc\ example snippet illustrates the syntax and
+meaning of the notions we just described.
+\begin{codesample2}
+  [hooks]
+  commit.example = python:mymodule.submodule.myhook
+\end{codesample2}
+When Mercurial runs the \texttt{commit.example} hook, it imports
+\texttt{mymodule.submodule}, looks for the callable object named
+\texttt{myhook}, and calls it.
+
+\subsection{Writing an in-process hook}
+
+The simplest in-process hook does nothing, but illustrates the basic
+shape of the hook API:
+\begin{codesample2}
+  def myhook(ui, repo, **kwargs):
+      pass
+\end{codesample2}
+The first argument to a Python hook is always a
+\pymodclass{mercurial.ui}{ui} object.  The second is a repository object;
+at the moment, it is always an instance of
+\pymodclass{mercurial.localrepo}{localrepository}.  Following these two
+arguments are other keyword arguments.  Which ones are passed in
+depends on the hook being called, but a hook can ignore arguments it
+doesn't care about by dropping them into a keyword argument dict, as
+with \texttt{**kwargs} above.
+
+\section{Some hook examples}
+
+\subsection{Writing meaningful commit messages}
+
+It's hard to imagine a useful commit message being very short.  The
+simple \hook{pretxncommit} hook of figure~\ref{ex:hook:msglen.go}
+will prevent you from committing a changeset with a message that is
+less than ten bytes long.
+
+\begin{figure}[ht]
+  \interaction{hook.msglen.go}
+  \caption{A hook that forbids overly short commit messages}
+  \label{ex:hook:msglen.go}
+\end{figure}
+
+\subsection{Checking for trailing whitespace}
+
+An interesting use of a commit-related hook is to help you to write
+cleaner code.  A simple example of ``cleaner code'' is the dictum that
+a change should not add any new lines of text that contain ``trailing
+whitespace''.  Trailing whitespace is a series of space and tab
+characters at the end of a line of text.  In most cases, trailing
+whitespace is unnecessary, invisible noise, but it is occasionally
+problematic, and people often prefer to get rid of it.
+
+You can use either the \hook{precommit} or \hook{pretxncommit} hook to
+tell whether you have a trailing whitespace problem.  If you use the
+\hook{precommit} hook, the hook will not know which files you are
+committing, so it will have to check every modified file in the
+repository for trailing white space.  If you want to commit a change
+to just the file \filename{foo}, but the file \filename{bar} contains
+trailing whitespace, doing a check in the \hook{precommit} hook will
+prevent you from committing \filename{foo} due to the problem with
+\filename{bar}.  This doesn't seem right.
+
+Should you choose the \hook{pretxncommit} hook, the check won't occur
+until just before the transaction for the commit completes.  This will
+allow you to check for problems only the exact files that are being
+committed.  However, if you entered the commit message interactively
+and the hook fails, the transaction will roll back; you'll have to
+re-enter the commit message after you fix the trailing whitespace and
+run \hgcmd{commit} again.
+
+\begin{figure}[ht]
+  \interaction{hook.ws.simple}
+  \caption{A simple hook that checks for trailing whitespace}
+  \label{ex:hook:ws.simple}
+\end{figure}
+
+Figure~\ref{ex:hook:ws.simple} introduces a simple \hook{pretxncommit}
+hook that checks for trailing whitespace.  This hook is short, but not
+very helpful.  It exits with an error status if a change adds a line
+with trailing whitespace to any file, but does not print any
+information that might help us to identify the offending file or
+line.  It also has the nice property of not paying attention to
+unmodified lines; only lines that introduce new trailing whitespace
+cause problems.
+
+\begin{figure}[ht]
+  \interaction{hook.ws.better}
+  \caption{A better trailing whitespace hook}
+  \label{ex:hook:ws.better}
+\end{figure}
+
+The example of figure~\ref{ex:hook:ws.better} is much more complex,
+but also more useful.  It parses a unified diff to see if any lines
+add trailing whitespace, and prints the name of the file and the line
+number of each such occurrence.  Even better, if the change adds
+trailing whitespace, this hook saves the commit comment and prints the
+name of the save file before exiting and telling Mercurial to roll the
+transaction back, so you can use
+\hgcmdargs{commit}{\hgopt{commit}{-l}~\emph{filename}} to reuse the
+saved commit message once you've corrected the problem.
+
+As a final aside, note in figure~\ref{ex:hook:ws.better} the use of
+\command{perl}'s in-place editing feature to get rid of trailing
+whitespace from a file.  This is concise and useful enough that I will
+reproduce it here.
+\begin{codesample2}
+  perl -pi -e 's,\\s+\$,,' filename
+\end{codesample2}
+
+\section{Bundled hooks}
+
+Mercurial ships with several bundled hooks.  You can find them in the
+\dirname{hgext} directory of a Mercurial source tree.  If you are
+using a Mercurial binary package, the hooks will be located in the
+\dirname{hgext} directory of wherever your package installer put
+Mercurial.
+
+\subsection{\hgext{acl}---access control for parts of a repository}
+
+The \hgext{acl} extension lets you control which remote users are
+allowed to push changesets to a networked server.  You can protect any
+portion of a repository (including the entire repo), so that a
+specific remote user can push changes that do not affect the protected
+portion.
+
+This extension implements access control based on the identity of the
+user performing a push, \emph{not} on who committed the changesets
+they're pushing.  It makes sense to use this hook only if you have a
+locked-down server environment that authenticates remote users, and
+you want to be sure that only specific users are allowed to push
+changes to that server.
+
+\subsubsection{Configuring the \hook{acl} hook}
+
+In order to manage incoming changesets, the \hgext{acl} hook must be
+used as a \hook{pretxnchangegroup} hook.  This lets it see which files
+are modified by each incoming changeset, and roll back a group of
+changesets if they modify ``forbidden'' files.  Example:
+\begin{codesample2}
+  [hooks]
+  pretxnchangegroup.acl = python:hgext.acl.hook
+\end{codesample2}
+
+The \hgext{acl} extension is configured using three sections.  
+
+The \rcsection{acl} section has only one entry, \rcitem{acl}{sources},
+which lists the sources of incoming changesets that the hook should
+pay attention to.  You don't normally need to configure this section.
+\begin{itemize}
+\item[\rcitem{acl}{serve}] Control incoming changesets that are arriving
+  from a remote repository over http or ssh.  This is the default
+  value of \rcitem{acl}{sources}, and usually the only setting you'll
+  need for this configuration item.
+\item[\rcitem{acl}{pull}] Control incoming changesets that are
+  arriving via a pull from a local repository.
+\item[\rcitem{acl}{push}] Control incoming changesets that are
+  arriving via a push from a local repository.
+\item[\rcitem{acl}{bundle}] Control incoming changesets that are
+  arriving from another repository via a bundle.
+\end{itemize}
+
+The \rcsection{acl.allow} section controls the users that are allowed to
+add changesets to the repository.  If this section is not present, all
+users that are not explicitly denied are allowed.  If this section is
+present, all users that are not explicitly allowed are denied (so an
+empty section means that all users are denied).
+
+The \rcsection{acl.deny} section determines which users are denied
+from adding changesets to the repository.  If this section is not
+present or is empty, no users are denied.
+
+The syntaxes for the \rcsection{acl.allow} and \rcsection{acl.deny}
+sections are identical.  On the left of each entry is a glob pattern
+that matches files or directories, relative to the root of the
+repository; on the right, a user name.
+
+In the following example, the user \texttt{docwriter} can only push
+changes to the \dirname{docs} subtree of the repository, while
+\texttt{intern} can push changes to any file or directory except
+\dirname{source/sensitive}.
+\begin{codesample2}
+  [acl.allow]
+  docs/** = docwriter
+
+  [acl.deny]
+  source/sensitive/** = intern
+\end{codesample2}
+
+\subsubsection{Testing and troubleshooting}
+
+If you want to test the \hgext{acl} hook, run it with Mercurial's
+debugging output enabled.  Since you'll probably be running it on a
+server where it's not convenient (or sometimes possible) to pass in
+the \hggopt{--debug} option, don't forget that you can enable
+debugging output in your \hgrc:
+\begin{codesample2}
+  [ui]
+  debug = true
+\end{codesample2}
+With this enabled, the \hgext{acl} hook will print enough information
+to let you figure out why it is allowing or forbidding pushes from
+specific users.
+
+\subsection{\hgext{bugzilla}---integration with Bugzilla}
+
+The \hgext{bugzilla} extension adds a comment to a Bugzilla bug
+whenever it finds a reference to that bug ID in a commit comment.  You
+can install this hook on a shared server, so that any time a remote
+user pushes changes to this server, the hook gets run.  
+
+It adds a comment to the bug that looks like this (you can configure
+the contents of the comment---see below):
+\begin{codesample2}
+  Changeset aad8b264143a, made by Joe User <joe.user@domain.com> in
+  the frobnitz repository, refers to this bug.
+
+  For complete details, see
+  http://hg.domain.com/frobnitz?cmd=changeset;node=aad8b264143a
+
+  Changeset description:
+        Fix bug 10483 by guarding against some NULL pointers
+\end{codesample2}
+The value of this hook is that it automates the process of updating a
+bug any time a changeset refers to it.  If you configure the hook
+properly, it makes it easy for people to browse straight from a
+Bugzilla bug to a changeset that refers to that bug.
+
+You can use the code in this hook as a starting point for some more
+exotic Bugzilla integration recipes.  Here are a few possibilities:
+\begin{itemize}
+\item Require that every changeset pushed to the server have a valid
+  bug~ID in its commit comment.  In this case, you'd want to configure
+  the hook as a \hook{pretxncommit} hook.  This would allow the hook
+  to reject changes that didn't contain bug IDs.
+\item Allow incoming changesets to automatically modify the
+  \emph{state} of a bug, as well as simply adding a comment.  For
+  example, the hook could recognise the string ``fixed bug 31337'' as
+  indicating that it should update the state of bug 31337 to
+  ``requires testing''.
+\end{itemize}
+
+\subsubsection{Configuring the \hook{bugzilla} hook}
+\label{sec:hook:bugzilla:config}
+
+You should configure this hook in your server's \hgrc\ as an
+\hook{incoming} hook, for example as follows:
+\begin{codesample2}
+  [hooks]
+  incoming.bugzilla = python:hgext.bugzilla.hook
+\end{codesample2}
+
+Because of the specialised nature of this hook, and because Bugzilla
+was not written with this kind of integration in mind, configuring
+this hook is a somewhat involved process.
+
+Before you begin, you must install the MySQL bindings for Python on
+the host(s) where you'll be running the hook.  If this is not
+available as a binary package for your system, you can download it
+from~\cite{web:mysql-python}.
+
+Configuration information for this hook lives in the
+\rcsection{bugzilla} section of your \hgrc.
+\begin{itemize}
+\item[\rcitem{bugzilla}{version}] The version of Bugzilla installed on
+  the server.  The database schema that Bugzilla uses changes
+  occasionally, so this hook has to know exactly which schema to use.
+  At the moment, the only version supported is \texttt{2.16}.
+\item[\rcitem{bugzilla}{host}] The hostname of the MySQL server that
+  stores your Bugzilla data.  The database must be configured to allow
+  connections from whatever host you are running the \hook{bugzilla}
+  hook on.
+\item[\rcitem{bugzilla}{user}] The username with which to connect to
+  the MySQL server.  The database must be configured to allow this
+  user to connect from whatever host you are running the
+  \hook{bugzilla} hook on.  This user must be able to access and
+  modify Bugzilla tables.  The default value of this item is
+  \texttt{bugs}, which is the standard name of the Bugzilla user in a
+  MySQL database.
+\item[\rcitem{bugzilla}{password}] The MySQL password for the user you
+  configured above.  This is stored as plain text, so you should make
+  sure that unauthorised users cannot read the \hgrc\ file where you
+  store this information.
+\item[\rcitem{bugzilla}{db}] The name of the Bugzilla database on the
+  MySQL server.  The default value of this item is \texttt{bugs},
+  which is the standard name of the MySQL database where Bugzilla
+  stores its data.
+\item[\rcitem{bugzilla}{notify}] If you want Bugzilla to send out a
+  notification email to subscribers after this hook has added a
+  comment to a bug, you will need this hook to run a command whenever
+  it updates the database.  The command to run depends on where you
+  have installed Bugzilla, but it will typically look something like
+  this, if you have Bugzilla installed in
+  \dirname{/var/www/html/bugzilla}:
+  \begin{codesample4}
+    cd /var/www/html/bugzilla && ./processmail %s nobody@nowhere.com
+  \end{codesample4}
+  The Bugzilla \texttt{processmail} program expects to be given a
+  bug~ID (the hook replaces ``\texttt{\%s}'' with the bug~ID) and an
+  email address.  It also expects to be able to write to some files in
+  the directory that it runs in.  If Bugzilla and this hook are not
+  installed on the same machine, you will need to find a way to run
+  \texttt{processmail} on the server where Bugzilla is installed.
+\end{itemize}
+
+\subsubsection{Mapping committer names to Bugzilla user names}
+
+By default, the \hgext{bugzilla} hook tries to use the email address
+of a changeset's committer as the Bugzilla user name with which to
+update a bug.  If this does not suit your needs, you can map committer
+email addresses to Bugzilla user names using a \rcsection{usermap}
+section.
+
+Each item in the \rcsection{usermap} section contains an email address
+on the left, and a Bugzilla user name on the right.
+\begin{codesample2}
+  [usermap]
+  jane.user@example.com = jane
+\end{codesample2}
+You can either keep the \rcsection{usermap} data in a normal \hgrc, or
+tell the \hgext{bugzilla} hook to read the information from an
+external \filename{usermap} file.  In the latter case, you can store
+\filename{usermap} data by itself in (for example) a user-modifiable
+repository.  This makes it possible to let your users maintain their
+own \rcitem{bugzilla}{usermap} entries.  The main \hgrc\ file might
+look like this:
+\begin{codesample2}
+  # regular hgrc file refers to external usermap file
+  [bugzilla]
+  usermap = /home/hg/repos/userdata/bugzilla-usermap.conf
+\end{codesample2}
+While the \filename{usermap} file that it refers to might look like
+this:
+\begin{codesample2}
+  # bugzilla-usermap.conf - inside a hg repository
+  [usermap]
+  stephanie@example.com = steph
+\end{codesample2}
+
+\subsubsection{Configuring the text that gets added to a bug}
+
+You can configure the text that this hook adds as a comment; you
+specify it in the form of a Mercurial template.  Several \hgrc\
+entries (still in the \rcsection{bugzilla} section) control this
+behaviour.
+\begin{itemize}
+\item[\texttt{strip}] The number of leading path elements to strip
+  from a repository's path name to construct a partial path for a URL.
+  For example, if the repositories on your server live under
+  \dirname{/home/hg/repos}, and you have a repository whose path is
+  \dirname{/home/hg/repos/app/tests}, then setting \texttt{strip} to
+  \texttt{4} will give a partial path of \dirname{app/tests}.  The
+  hook will make this partial path available when expanding a
+  template, as \texttt{webroot}.
+\item[\texttt{template}] The text of the template to use.  In addition
+  to the usual changeset-related variables, this template can use
+  \texttt{hgweb} (the value of the \texttt{hgweb} configuration item
+  above) and \texttt{webroot} (the path constructed using
+  \texttt{strip} above).
+\end{itemize}
+
+In addition, you can add a \rcitem{web}{baseurl} item to the
+\rcsection{web} section of your \hgrc.  The \hgext{bugzilla} hook will
+make this available when expanding a template, as the base string to
+use when constructing a URL that will let users browse from a Bugzilla
+comment to view a changeset.  Example:
+\begin{codesample2}
+  [web]
+  baseurl = http://hg.domain.com/
+\end{codesample2}
+
+Here is an example set of \hgext{bugzilla} hook config information.
+\begin{codesample2}
+  [bugzilla]
+  host = bugzilla.example.com
+  password = mypassword
+  version = 2.16
+  # server-side repos live in /home/hg/repos, so strip 4 leading
+  # separators
+  strip = 4
+  hgweb = http://hg.example.com/
+  usermap = /home/hg/repos/notify/bugzilla.conf
+  template = Changeset \{node|short\}, made by \{author\} in the \{webroot\}
+    repo, refers to this bug.\\nFor complete details, see 
+    \{hgweb\}\{webroot\}?cmd=changeset;node=\{node|short\}\\nChangeset
+    description:\\n\\t\{desc|tabindent\}
+\end{codesample2}
+
+\subsubsection{Testing and troubleshooting}
+
+The most common problems with configuring the \hgext{bugzilla} hook
+relate to running Bugzilla's \filename{processmail} script and mapping
+committer names to user names.
+
+Recall from section~\ref{sec:hook:bugzilla:config} above that the user
+that runs the Mercurial process on the server is also the one that
+will run the \filename{processmail} script.  The
+\filename{processmail} script sometimes causes Bugzilla to write to
+files in its configuration directory, and Bugzilla's configuration
+files are usually owned by the user that your web server runs under.
+
+You can cause \filename{processmail} to be run with the suitable
+user's identity using the \command{sudo} command.  Here is an example
+entry for a \filename{sudoers} file.
+\begin{codesample2}
+  hg_user = (httpd_user) NOPASSWD: /var/www/html/bugzilla/processmail-wrapper %s
+\end{codesample2}
+This allows the \texttt{hg\_user} user to run a
+\filename{processmail-wrapper} program under the identity of
+\texttt{httpd\_user}.
+
+This indirection through a wrapper script is necessary, because
+\filename{processmail} expects to be run with its current directory
+set to wherever you installed Bugzilla; you can't specify that kind of
+constraint in a \filename{sudoers} file.  The contents of the wrapper
+script are simple:
+\begin{codesample2}
+  #!/bin/sh
+  cd `dirname $0` && ./processmail "$1" nobody@example.com
+\end{codesample2}
+It doesn't seem to matter what email address you pass to
+\filename{processmail}.
+
+If your \rcsection{usermap} is not set up correctly, users will see an
+error message from the \hgext{bugzilla} hook when they push changes
+to the server.  The error message will look like this:
+\begin{codesample2}
+  cannot find bugzilla user id for john.q.public@example.com
+\end{codesample2}
+What this means is that the committer's address,
+\texttt{john.q.public@example.com}, is not a valid Bugzilla user name,
+nor does it have an entry in your \rcsection{usermap} that maps it to
+a valid Bugzilla user name.
+
+\subsection{\hgext{notify}---send email notifications}
+
+Although Mercurial's built-in web server provides RSS feeds of changes
+in every repository, many people prefer to receive change
+notifications via email.  The \hgext{notify} hook lets you send out
+notifications to a set of email addresses whenever changesets arrive
+that those subscribers are interested in.
+
+As with the \hgext{bugzilla} hook, the \hgext{notify} hook is
+template-driven, so you can customise the contents of the notification
+messages that it sends.
+
+By default, the \hgext{notify} hook includes a diff of every changeset
+that it sends out; you can limit the size of the diff, or turn this
+feature off entirely.  It is useful for letting subscribers review
+changes immediately, rather than clicking to follow a URL.
+
+\subsubsection{Configuring the \hgext{notify} hook}
+
+You can set up the \hgext{notify} hook to send one email message per
+incoming changeset, or one per incoming group of changesets (all those
+that arrived in a single pull or push).
+\begin{codesample2}
+  [hooks]
+  # send one email per group of changes
+  changegroup.notify = python:hgext.notify.hook
+  # send one email per change
+  incoming.notify = python:hgext.notify.hook
+\end{codesample2}
+
+Configuration information for this hook lives in the
+\rcsection{notify} section of a \hgrc\ file.
+\begin{itemize}
+\item[\rcitem{notify}{test}] By default, this hook does not send out
+  email at all; instead, it prints the message that it \emph{would}
+  send.  Set this item to \texttt{false} to allow email to be sent.
+  The reason that sending of email is turned off by default is that it
+  takes several tries to configure this extension exactly as you would
+  like, and it would be bad form to spam subscribers with a number of
+  ``broken'' notifications while you debug your configuration.
+\item[\rcitem{notify}{config}] The path to a configuration file that
+  contains subscription information.  This is kept separate from the
+  main \hgrc\ so that you can maintain it in a repository of its own.
+  People can then clone that repository, update their subscriptions,
+  and push the changes back to your server.
+\item[\rcitem{notify}{strip}] The number of leading path separator
+  characters to strip from a repository's path, when deciding whether
+  a repository has subscribers.  For example, if the repositories on
+  your server live in \dirname{/home/hg/repos}, and \hgext{notify} is
+  considering a repository named \dirname{/home/hg/repos/shared/test},
+  setting \rcitem{notify}{strip} to \texttt{4} will cause
+  \hgext{notify} to trim the path it considers down to
+  \dirname{shared/test}, and it will match subscribers against that.
+\item[\rcitem{notify}{template}] The template text to use when sending
+  messages.  This specifies both the contents of the message header
+  and its body.
+\item[\rcitem{notify}{maxdiff}] The maximum number of lines of diff
+  data to append to the end of a message.  If a diff is longer than
+  this, it is truncated.  By default, this is set to 300.  Set this to
+  \texttt{0} to omit diffs from notification emails.
+\item[\rcitem{notify}{sources}] A list of sources of changesets to
+  consider.  This lets you limit \hgext{notify} to only sending out
+  email about changes that remote users pushed into this repository
+  via a server, for example.  See section~\ref{sec:hook:sources} for
+  the sources you can specify here.
+\end{itemize}
+
+If you set the \rcitem{web}{baseurl} item in the \rcsection{web}
+section, you can use it in a template; it will be available as
+\texttt{webroot}.
+
+Here is an example set of \hgext{notify} configuration information.
+\begin{codesample2}
+  [notify]
+  # really send email
+  test = false
+  # subscriber data lives in the notify repo
+  config = /home/hg/repos/notify/notify.conf
+  # repos live in /home/hg/repos on server, so strip 4 "/" chars
+  strip = 4
+  template = X-Hg-Repo: \{webroot\}
+    Subject: \{webroot\}: \{desc|firstline|strip\}
+    From: \{author\}
+
+    changeset \{node|short\} in \{root\}
+    details: \{baseurl\}\{webroot\}?cmd=changeset;node=\{node|short\}
+    description:
+      \{desc|tabindent|strip\}
+
+  [web]
+  baseurl = http://hg.example.com/
+\end{codesample2}
+
+This will produce a message that looks like the following:
+\begin{codesample2}
+  X-Hg-Repo: tests/slave
+  Subject: tests/slave: Handle error case when slave has no buffers
+  Date: Wed,  2 Aug 2006 15:25:46 -0700 (PDT)
+
+  changeset 3cba9bfe74b5 in /home/hg/repos/tests/slave
+  details: http://hg.example.com/tests/slave?cmd=changeset;node=3cba9bfe74b5
+  description:
+          Handle error case when slave has no buffers
+  diffs (54 lines):
+
+  diff -r 9d95df7cf2ad -r 3cba9bfe74b5 include/tests.h
+  --- a/include/tests.h      Wed Aug 02 15:19:52 2006 -0700
+  +++ b/include/tests.h      Wed Aug 02 15:25:26 2006 -0700
+  @@ -212,6 +212,15 @@ static __inline__ void test_headers(void *h)
+  [...snip...]
+\end{codesample2}
+
+\subsubsection{Testing and troubleshooting}
+
+Do not forget that by default, the \hgext{notify} extension \emph{will
+  not send any mail} until you explicitly configure it to do so, by
+setting \rcitem{notify}{test} to \texttt{false}.  Until you do that,
+it simply prints the message it \emph{would} send.
+
+\section{Information for writers of hooks}
+\label{sec:hook:ref}
+
+\subsection{In-process hook execution}
+
+An in-process hook is called with arguments of the following form:
+\begin{codesample2}
+  def myhook(ui, repo, **kwargs):
+      pass
+\end{codesample2}
+The \texttt{ui} parameter is a \pymodclass{mercurial.ui}{ui} object.
+The \texttt{repo} parameter is a
+\pymodclass{mercurial.localrepo}{localrepository} object.  The
+names and values of the \texttt{**kwargs} parameters depend on the
+hook being invoked, with the following common features:
+\begin{itemize}
+\item If a parameter is named \texttt{node} or
+  \texttt{parent\emph{N}}, it will contain a hexadecimal changeset ID.
+  The empty string is used to represent ``null changeset ID'' instead
+  of a string of zeroes.
+\item If a parameter is named \texttt{url}, it will contain the URL of
+  a remote repository, if that can be determined.
+\item Boolean-valued parameters are represented as Python
+  \texttt{bool} objects.
+\end{itemize}
+
+An in-process hook is called without a change to the process's working
+directory (unlike external hooks, which are run in the root of the
+repository).  It must not change the process's working directory, or
+it will cause any calls it makes into the Mercurial API to fail.
+
+If a hook returns a boolean ``false'' value, it is considered to have
+succeeded.  If it returns a boolean ``true'' value or raises an
+exception, it is considered to have failed.  A useful way to think of
+the calling convention is ``tell me if you fail''.
+
+Note that changeset IDs are passed into Python hooks as hexadecimal
+strings, not the binary hashes that Mercurial's APIs normally use.  To
+convert a hash from hex to binary, use the
+\pymodfunc{mercurial.node}{bin} function.
+
+\subsection{External hook execution}
+
+An external hook is passed to the shell of the user running Mercurial.
+Features of that shell, such as variable substitution and command
+redirection, are available.  The hook is run in the root directory of
+the repository (unlike in-process hooks, which are run in the same
+directory that Mercurial was run in).
+
+Hook parameters are passed to the hook as environment variables.  Each
+environment variable's name is converted in upper case and prefixed
+with the string ``\texttt{HG\_}''.  For example, if the name of a
+parameter is ``\texttt{node}'', the name of the environment variable
+representing that parameter will be ``\texttt{HG\_NODE}''.
+
+A boolean parameter is represented as the string ``\texttt{1}'' for
+``true'', ``\texttt{0}'' for ``false''.  If an environment variable is
+named \envar{HG\_NODE}, \envar{HG\_PARENT1} or \envar{HG\_PARENT2}, it
+contains a changeset ID represented as a hexadecimal string.  The
+empty string is used to represent ``null changeset ID'' instead of a
+string of zeroes.  If an environment variable is named
+\envar{HG\_URL}, it will contain the URL of a remote repository, if
+that can be determined.
+
+If a hook exits with a status of zero, it is considered to have
+succeeded.  If it exits with a non-zero status, it is considered to
+have failed.
+
+\subsection{Finding out where changesets come from}
+
+A hook that involves the transfer of changesets between a local
+repository and another may be able to find out information about the
+``far side''.  Mercurial knows \emph{how} changes are being
+transferred, and in many cases \emph{where} they are being transferred
+to or from.
+
+\subsubsection{Sources of changesets}
+\label{sec:hook:sources}
+
+Mercurial will tell a hook what means are, or were, used to transfer
+changesets between repositories.  This is provided by Mercurial in a
+Python parameter named \texttt{source}, or an environment variable named
+\envar{HG\_SOURCE}.
+
+\begin{itemize}
+\item[\texttt{serve}] Changesets are transferred to or from a remote
+  repository over http or ssh.
+\item[\texttt{pull}] Changesets are being transferred via a pull from
+  one repository into another.
+\item[\texttt{push}] Changesets are being transferred via a push from
+  one repository into another.
+\item[\texttt{bundle}] Changesets are being transferred to or from a
+  bundle.
+\end{itemize}
+
+\subsubsection{Where changes are going---remote repository URLs}
+\label{sec:hook:url}
+
+When possible, Mercurial will tell a hook the location of the ``far
+side'' of an activity that transfers changeset data between
+repositories.  This is provided by Mercurial in a Python parameter
+named \texttt{url}, or an environment variable named \envar{HG\_URL}.
+
+This information is not always known.  If a hook is invoked in a
+repository that is being served via http or ssh, Mercurial cannot tell
+where the remote repository is, but it may know where the client is
+connecting from.  In such cases, the URL will take one of the
+following forms:
+\begin{itemize}
+\item \texttt{remote:ssh:\emph{ip-address}}---remote ssh client, at
+  the given IP address.
+\item \texttt{remote:http:\emph{ip-address}}---remote http client, at
+  the given IP address.  If the client is using SSL, this will be of
+  the form \texttt{remote:https:\emph{ip-address}}.
+\item Empty---no information could be discovered about the remote
+  client.
+\end{itemize}
+
+\section{Hook reference}
+
+\subsection{\hook{changegroup}---after remote changesets added}
+\label{sec:hook:changegroup}
+
+This hook is run after a group of pre-existing changesets has been
+added to the repository, for example via a \hgcmd{pull} or
+\hgcmd{unbundle}.  This hook is run once per operation that added one
+or more changesets.  This is in contrast to the \hook{incoming} hook,
+which is run once per changeset, regardless of whether the changesets
+arrive in a group.
+
+Some possible uses for this hook include kicking off an automated
+build or test of the added changesets, updating a bug database, or
+notifying subscribers that a repository contains new changes.
+
+Parameters to this hook:
+\begin{itemize}
+\item[\texttt{node}] A changeset ID.  The changeset ID of the first
+  changeset in the group that was added.  All changesets between this
+  and \index{tags!\texttt{tip}}\texttt{tip}, inclusive, were added by
+  a single \hgcmd{pull}, \hgcmd{push} or \hgcmd{unbundle}.
+\item[\texttt{source}] A string.  The source of these changes.  See
+  section~\ref{sec:hook:sources} for details.
+\item[\texttt{url}] A URL.  The location of the remote repository, if
+  known.  See section~\ref{sec:hook:url} for more information.
+\end{itemize}
+
+See also: \hook{incoming} (section~\ref{sec:hook:incoming}),
+\hook{prechangegroup} (section~\ref{sec:hook:prechangegroup}),
+\hook{pretxnchangegroup} (section~\ref{sec:hook:pretxnchangegroup})
+
+\subsection{\hook{commit}---after a new changeset is created}
+\label{sec:hook:commit}
+
+This hook is run after a new changeset has been created.
+
+Parameters to this hook:
+\begin{itemize}
+\item[\texttt{node}] A changeset ID.  The changeset ID of the newly
+  committed changeset.
+\item[\texttt{parent1}] A changeset ID.  The changeset ID of the first
+  parent of the newly committed changeset.
+\item[\texttt{parent2}] A changeset ID.  The changeset ID of the second
+  parent of the newly committed changeset.
+\end{itemize}
+
+See also: \hook{precommit} (section~\ref{sec:hook:precommit}),
+\hook{pretxncommit} (section~\ref{sec:hook:pretxncommit})
+
+\subsection{\hook{incoming}---after one remote changeset is added}
+\label{sec:hook:incoming}
+
+This hook is run after a pre-existing changeset has been added to the
+repository, for example via a \hgcmd{push}.  If a group of changesets
+was added in a single operation, this hook is called once for each
+added changeset.
+
+You can use this hook for the same purposes as the \hook{changegroup}
+hook (section~\ref{sec:hook:changegroup}); it's simply more convenient
+sometimes to run a hook once per group of changesets, while other
+times it's handier once per changeset.
+
+Parameters to this hook:
+\begin{itemize}
+\item[\texttt{node}] A changeset ID.  The ID of the newly added
+  changeset.
+\item[\texttt{source}] A string.  The source of these changes.  See
+  section~\ref{sec:hook:sources} for details.
+\item[\texttt{url}] A URL.  The location of the remote repository, if
+  known.  See section~\ref{sec:hook:url} for more information.
+\end{itemize}
+
+See also: \hook{changegroup} (section~\ref{sec:hook:changegroup}) \hook{prechangegroup} (section~\ref{sec:hook:prechangegroup}), \hook{pretxnchangegroup} (section~\ref{sec:hook:pretxnchangegroup})
+
+\subsection{\hook{outgoing}---after changesets are propagated}
+\label{sec:hook:outgoing}
+
+This hook is run after a group of changesets has been propagated out
+of this repository, for example by a \hgcmd{push} or \hgcmd{bundle}
+command.
+
+One possible use for this hook is to notify administrators that
+changes have been pulled.
+
+Parameters to this hook:
+\begin{itemize}
+\item[\texttt{node}] A changeset ID.  The changeset ID of the first
+  changeset of the group that was sent.
+\item[\texttt{source}] A string.  The source of the of the operation
+  (see section~\ref{sec:hook:sources}).  If a remote client pulled
+  changes from this repository, \texttt{source} will be
+  \texttt{serve}.  If the client that obtained changes from this
+  repository was local, \texttt{source} will be \texttt{bundle},
+  \texttt{pull}, or \texttt{push}, depending on the operation the
+  client performed.
+\item[\texttt{url}] A URL.  The location of the remote repository, if
+  known.  See section~\ref{sec:hook:url} for more information.
+\end{itemize}
+
+See also: \hook{preoutgoing} (section~\ref{sec:hook:preoutgoing})
+
+\subsection{\hook{prechangegroup}---before starting to add remote changesets}
+\label{sec:hook:prechangegroup}
+
+This controlling hook is run before Mercurial begins to add a group of
+changesets from another repository.
+
+This hook does not have any information about the changesets to be
+added, because it is run before transmission of those changesets is
+allowed to begin.  If this hook fails, the changesets will not be
+transmitted.
+
+One use for this hook is to prevent external changes from being added
+to a repository.  For example, you could use this to ``freeze'' a
+server-hosted branch temporarily or permanently so that users cannot
+push to it, while still allowing a local administrator to modify the
+repository.
+
+Parameters to this hook:
+\begin{itemize}
+\item[\texttt{source}] A string.  The source of these changes.  See
+  section~\ref{sec:hook:sources} for details.
+\item[\texttt{url}] A URL.  The location of the remote repository, if
+  known.  See section~\ref{sec:hook:url} for more information.
+\end{itemize}
+
+See also: \hook{changegroup} (section~\ref{sec:hook:changegroup}),
+\hook{incoming} (section~\ref{sec:hook:incoming}), ,
+\hook{pretxnchangegroup} (section~\ref{sec:hook:pretxnchangegroup})
+
+\subsection{\hook{precommit}---before starting to commit a changeset}
+\label{sec:hook:precommit}
+
+This hook is run before Mercurial begins to commit a new changeset.
+It is run before Mercurial has any of the metadata for the commit,
+such as the files to be committed, the commit message, or the commit
+date.
+
+One use for this hook is to disable the ability to commit new
+changesets, while still allowing incoming changesets.  Another is to
+run a build or test, and only allow the commit to begin if the build
+or test succeeds.
+
+Parameters to this hook:
+\begin{itemize}
+\item[\texttt{parent1}] A changeset ID.  The changeset ID of the first
+  parent of the working directory.
+\item[\texttt{parent2}] A changeset ID.  The changeset ID of the second
+  parent of the working directory.
+\end{itemize}
+If the commit proceeds, the parents of the working directory will
+become the parents of the new changeset.
+
+See also: \hook{commit} (section~\ref{sec:hook:commit}),
+\hook{pretxncommit} (section~\ref{sec:hook:pretxncommit})
+
+\subsection{\hook{preoutgoing}---before starting to propagate changesets}
+\label{sec:hook:preoutgoing}
+
+This hook is invoked before Mercurial knows the identities of the
+changesets to be transmitted.
+
+One use for this hook is to prevent changes from being transmitted to
+another repository.
+
+Parameters to this hook:
+\begin{itemize}
+\item[\texttt{source}] A string.  The source of the operation that is
+  attempting to obtain changes from this repository (see
+  section~\ref{sec:hook:sources}).  See the documentation for the
+  \texttt{source} parameter to the \hook{outgoing} hook, in
+  section~\ref{sec:hook:outgoing}, for possible values of this
+  parameter.
+\item[\texttt{url}] A URL.  The location of the remote repository, if
+  known.  See section~\ref{sec:hook:url} for more information.
+\end{itemize}
+
+See also: \hook{outgoing} (section~\ref{sec:hook:outgoing})
+
+\subsection{\hook{pretag}---before tagging a changeset}
+\label{sec:hook:pretag}
+
+This controlling hook is run before a tag is created.  If the hook
+succeeds, creation of the tag proceeds.  If the hook fails, the tag is
+not created.
+
+Parameters to this hook:
+\begin{itemize}
+\item[\texttt{local}] A boolean.  Whether the tag is local to this
+  repository instance (i.e.~stored in \sfilename{.hg/localtags}) or
+  managed by Mercurial (stored in \sfilename{.hgtags}).
+\item[\texttt{node}] A changeset ID.  The ID of the changeset to be tagged.
+\item[\texttt{tag}] A string.  The name of the tag to be created.
+\end{itemize}
+
+If the tag to be created is revision-controlled, the \hook{precommit}
+and \hook{pretxncommit} hooks (sections~\ref{sec:hook:commit}
+and~\ref{sec:hook:pretxncommit}) will also be run.
+
+See also: \hook{tag} (section~\ref{sec:hook:tag})
+
+\subsection{\hook{pretxnchangegroup}---before completing addition of
+  remote changesets}
+\label{sec:hook:pretxnchangegroup}
+
+This controlling hook is run before a transaction---that manages the
+addition of a group of new changesets from outside the
+repository---completes.  If the hook succeeds, the transaction
+completes, and all of the changesets become permanent within this
+repository.  If the hook fails, the transaction is rolled back, and
+the data for the changesets is erased.
+
+This hook can access the metadata associated with the almost-added
+changesets, but it should not do anything permanent with this data.
+It must also not modify the working directory.
+
+While this hook is running, if other Mercurial processes access this
+repository, they will be able to see the almost-added changesets as if
+they are permanent.  This may lead to race conditions if you do not
+take steps to avoid them.
+
+This hook can be used to automatically vet a group of changesets.  If
+the hook fails, all of the changesets are ``rejected'' when the
+transaction rolls back.
+
+Parameters to this hook:
+\begin{itemize}
+\item[\texttt{node}] A changeset ID.  The changeset ID of the first
+  changeset in the group that was added.  All changesets between this
+  and \index{tags!\texttt{tip}}\texttt{tip}, inclusive, were added by
+  a single \hgcmd{pull}, \hgcmd{push} or \hgcmd{unbundle}.
+\item[\texttt{source}] A string.  The source of these changes.  See
+  section~\ref{sec:hook:sources} for details.
+\item[\texttt{url}] A URL.  The location of the remote repository, if
+  known.  See section~\ref{sec:hook:url} for more information.
+\end{itemize}
+
+See also: \hook{changegroup} (section~\ref{sec:hook:changegroup}),
+\hook{incoming} (section~\ref{sec:hook:incoming}),
+\hook{prechangegroup} (section~\ref{sec:hook:prechangegroup})
+
+\subsection{\hook{pretxncommit}---before completing commit of new changeset}
+\label{sec:hook:pretxncommit}
+
+This controlling hook is run before a transaction---that manages a new
+commit---completes.  If the hook succeeds, the transaction completes
+and the changeset becomes permanent within this repository.  If the
+hook fails, the transaction is rolled back, and the commit data is
+erased.
+
+This hook can access the metadata associated with the almost-new
+changeset, but it should not do anything permanent with this data.  It
+must also not modify the working directory.
+
+While this hook is running, if other Mercurial processes access this
+repository, they will be able to see the almost-new changeset as if it
+is permanent.  This may lead to race conditions if you do not take
+steps to avoid them.
+
+Parameters to this hook:
+\begin{itemize}
+\item[\texttt{node}] A changeset ID.  The changeset ID of the newly
+  committed changeset.
+\item[\texttt{parent1}] A changeset ID.  The changeset ID of the first
+  parent of the newly committed changeset.
+\item[\texttt{parent2}] A changeset ID.  The changeset ID of the second
+  parent of the newly committed changeset.
+\end{itemize}
+
+See also: \hook{precommit} (section~\ref{sec:hook:precommit})
+
+\subsection{\hook{preupdate}---before updating or merging working directory}
+\label{sec:hook:preupdate}
+
+This controlling hook is run before an update or merge of the working
+directory begins.  It is run only if Mercurial's normal pre-update
+checks determine that the update or merge can proceed.  If the hook
+succeeds, the update or merge may proceed; if it fails, the update or
+merge does not start.
+
+Parameters to this hook:
+\begin{itemize}
+\item[\texttt{parent1}] A changeset ID.  The ID of the parent that the
+  working directory is to be updated to.  If the working directory is
+  being merged, it will not change this parent.
+\item[\texttt{parent2}] A changeset ID.  Only set if the working
+  directory is being merged.  The ID of the revision that the working
+  directory is being merged with.
+\end{itemize}
+
+See also: \hook{update} (section~\ref{sec:hook:update})
+
+\subsection{\hook{tag}---after tagging a changeset}
+\label{sec:hook:tag}
+
+This hook is run after a tag has been created.
+
+Parameters to this hook:
+\begin{itemize}
+\item[\texttt{local}] A boolean.  Whether the new tag is local to this
+  repository instance (i.e.~stored in \sfilename{.hg/localtags}) or
+  managed by Mercurial (stored in \sfilename{.hgtags}).
+\item[\texttt{node}] A changeset ID.  The ID of the changeset that was
+  tagged.
+\item[\texttt{tag}] A string.  The name of the tag that was created.
+\end{itemize}
+
+If the created tag is revision-controlled, the \hook{commit} hook
+(section~\ref{sec:hook:commit}) is run before this hook.
+
+See also: \hook{pretag} (section~\ref{sec:hook:pretag})
+
+\subsection{\hook{update}---after updating or merging working directory}
+\label{sec:hook:update}
+
+This hook is run after an update or merge of the working directory
+completes.  Since a merge can fail (if the external \command{hgmerge}
+command fails to resolve conflicts in a file), this hook communicates
+whether the update or merge completed cleanly.
+
+\begin{itemize}
+\item[\texttt{error}] A boolean.  Indicates whether the update or
+  merge completed successfully.
+\item[\texttt{parent1}] A changeset ID.  The ID of the parent that the
+  working directory was updated to.  If the working directory was
+  merged, it will not have changed this parent.
+\item[\texttt{parent2}] A changeset ID.  Only set if the working
+  directory was merged.  The ID of the revision that the working
+  directory was merged with.
+\end{itemize}
+
+See also: \hook{preupdate} (section~\ref{sec:hook:preupdate})
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "00book"
+%%% End: 
