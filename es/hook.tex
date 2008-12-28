@@ -383,149 +383,171 @@ embargo, cuando usted tiene un gancho bastante directo por escribir y
 no le importa el desempeño (el caso de la mayoría de los ganchos), es
 perfectamente admisible un guión de línea de comandos.
 
-\subsection{Hook parameters}
+\subsection{Parámetros para ganchos}
 \label{sec:hook:param}
 
-Mercurial calls each hook with a set of well-defined parameters.  In
-Python, a parameter is passed as a keyword argument to your hook
-function.  For an external program, a parameter is passed as an
-environment variable.
+Mercurial llama cada gancho con un conjunto de paŕametros bien
+definidos. En Python, un parámetro se pasa como argumento de palabra
+clave a su función de gancho. Para un programa externo, los parámetros
+son pasados como variables de entornos.
 
-Whether your hook is written in Python or as a shell script, the
-hook-specific parameter names and values will be the same.  A boolean
-parameter will be represented as a boolean value in Python, but as the
-number 1 (for ``true'') or 0 (for ``false'') as an environment
-variable for an external hook.  If a hook parameter is named
-\texttt{foo}, the keyword argument for a Python hook will also be
-named \texttt{foo}, while the environment variable for an external
-hook will be named \texttt{HG\_FOO}.
+Sin importar si su gancho está escrito en Python o como guión de línea
+de comandos, los nombres y valores de los parámetros específicos de
+los ganchos serán los mismos. Un parámetro booleano será representado
+como un valor booleano en Python, pero como el número 1 (para
+``verdadero'') o 0 (para falso) en una variable de entorno para un
+gancho externo. Si un parámetro se llama \texttt{foo}, el argumento de
+palabra clave para un gancho en Python también se llamará
+\texttt{foo}, mientras que la variable de entorno para un gancho
+externo se llamará \texttt{HG\_FOO}.
 
-\subsection{Hook return values and activity control}
+\subsection{Valores de retorno de ganchos y control de actividades}
 
-A hook that executes successfully must exit with a status of zero if
-external, or return boolean ``false'' if in-process.  Failure is
-indicated with a non-zero exit status from an external hook, or an
-in-process hook returning boolean ``true''.  If an in-process hook
-raises an exception, the hook is considered to have failed.
+Un gancho que se ejecuta exitosamente debe terminar con un código de
+salida de cero, si es externo, o retornar el valor booleano
+``falso'', si es interno. Un fallo se indica con un código de salida
+diferente de cero desde un gancho externo, o un valor de retorno
+booleano ``verdadero''. Si un gancho interno genera una excepción, se
+considera que el gancho ha fallado.
 
-For a hook that controls whether an activity can proceed, zero/false
-means ``allow'', while non-zero/true/exception means ``deny''.
+Para los ganchos que controlan si una actividad puede continuar o no,
+cero/falso quiere decir ``permitir'', mientras que
+% TODO me suena mejor "no permitir" que "denegar"
+no-cero/verdadero/excepción quiere decir ``no permitir''.
 
-\subsection{Writing an external hook}
+\subsection{Escribir un gancho externo}
 
-When you define an external hook in your \hgrc\ and the hook is run,
-its value is passed to your shell, which interprets it.  This means
-that you can use normal shell constructs in the body of the hook.
+Cuando usted define un gancho externo en su fichero \hgrc\ y el mismo
+es ejecutado, dicha definición pasa a su intérprete de comandos, que
+hace la interpretación correspondiente. Esto significa que usted puede
+usar elementos normales del intérprete en el cuerpo del gancho.
 
-An executable hook is always run with its current directory set to a
-repository's root directory.
+Un gancho ejecutable siempre es ejecutado con su directorio actual
+fijado al directorio raíz del repositorio.
 
-Each hook parameter is passed in as an environment variable; the name
-is upper-cased, and prefixed with the string ``\texttt{HG\_}''.
+Cada parámetro para el gancho es pasado como una variable de entorno;
+el nombre está en mayúsculas, y tiene como prefijo la cadena
+``\texttt{HG\_}''.
 
-With the exception of hook parameters, Mercurial does not set or
-modify any environment variables when running a hook.  This is useful
-to remember if you are writing a site-wide hook that may be run by a
-number of different users with differing environment variables set.
-In multi-user situations, you should not rely on environment variables
-being set to the values you have in your environment when testing the
-hook.
+Con la excepción de los parámetros para los ganchos, Mercurial no
+define o modifica ninguna variable de entorno al ejecutar un gancho.
+Es útil recordar esto al escribir un gancho global que podría ser
+ejecutado por varios usuarios con distintas variables de entorno
+fijadas. En situaciones con múltiples usuarios, usted no debería
+asumir la existencia de ninguna variable de entorno, ni que sus
+valores sean los mismos que tenían cuando usted probó el gancho en su
+ambiente de trabajo.
 
-\subsection{Telling Mercurial to use an in-process hook}
+\subsection{Indicar a Mercurial que use un gancho interno}
 
-The \hgrc\ syntax for defining an in-process hook is slightly
-different than for an executable hook.  The value of the hook must
-start with the text ``\texttt{python:}'', and continue with the
-fully-qualified name of a callable object to use as the hook's value.
+La sintaxis para definir un gancho interno en el fichero \hgrc\ es
+ligeramente diferente de la usada para un gancho externo. El valor del
+gancho debe comenzar con el texto ``\texttt{python:}'', y continuar
+con el nombre completamente cualificado de un objeto invocable que se
+usará como el valor del gancho.
 
-The module in which a hook lives is automatically imported when a hook
-is run.  So long as you have the module name and \envar{PYTHONPATH}
-right, it should ``just work''.
+El módulo en que vive un gancho es importado automáticamente cuando se
+ejecuta un gancho. Siempre que usted tenga el nombre del módulo y la
+variable de entorno \envar{PYTHONPATH} ajustada adecuadamente, todo
+debería funcionar sin problemas.
 
-The following \hgrc\ example snippet illustrates the syntax and
-meaning of the notions we just described.
+El siguiente fragmento de ejemplo de un fichero \hgrc\ ilustra la
+sintaxis y significado de los conceptos que acabamos de describir.
 \begin{codesample2}
   [hooks]
   commit.example = python:mymodule.submodule.myhook
 \end{codesample2}
-When Mercurial runs the \texttt{commit.example} hook, it imports
-\texttt{mymodule.submodule}, looks for the callable object named
-\texttt{myhook}, and calls it.
+Cuando Mercurial ejecuta el gancho \texttt{commit.example}, importa 
+\texttt{mymodule.submodule}, busca el objeto invocable llamado
+\texttt{myhook}, y lo invoca (llama).
 
-\subsection{Writing an in-process hook}
+\subsection{Escribir un gancho interno}
 
-The simplest in-process hook does nothing, but illustrates the basic
-shape of the hook API:
+El gancho interno más sencillo no hace nada, pero ilustra la
+estructura básica de la API\footnote{\emph{Application Progamming
+Interface}, Interfaz para Programación de Aplicaciones} para ganchos:
 \begin{codesample2}
   def myhook(ui, repo, **kwargs):
       pass
 \end{codesample2}
-The first argument to a Python hook is always a
-\pymodclass{mercurial.ui}{ui} object.  The second is a repository object;
-at the moment, it is always an instance of
-\pymodclass{mercurial.localrepo}{localrepository}.  Following these two
-arguments are other keyword arguments.  Which ones are passed in
-depends on the hook being called, but a hook can ignore arguments it
-doesn't care about by dropping them into a keyword argument dict, as
-with \texttt{**kwargs} above.
+El primer argumento para un gancho Python siempre es un objeto
+\pymodclass{mercurial.ui}{ui}.  El segundo es un objeto repositorio;
+de momento, siempre es una instancia de 
+\pymodclass{mercurial.localrepo}{localrepository}.  Después de estos
+dos argumentos están los argumentos de palabra clave. Los argumentos
+que se pasen dependerán del tipo de gancho que se esté llamando, pero
+un gancho siempre puede ignorar los argumentos que no le interesen,
+relegándolos a un diccionario de argumentos por palabras clave, como se
+hizo arriba con \texttt{**kwargs}.
 
-\section{Some hook examples}
+\section{Ejemplos de ganchos}
 
-\subsection{Writing meaningful commit messages}
+\subsection{Escribir mensajes de consignación significativos}
 
-It's hard to imagine a useful commit message being very short.  The
-simple \hook{pretxncommit} hook of figure~\ref{ex:hook:msglen.go}
-will prevent you from committing a changeset with a message that is
-less than ten bytes long.
+Es difícil de imaginar un mensaje de consignación útil y al mismo
+tiempo muy corto. El simple gancho \hook{pretxncommit} de la
+figura~\ref{ex:hook:msglen.go} evitará que usted consigne un conjunto
+de cambios con un mensaje de menos de 10 bytes de longitud.
 
 \begin{figure}[ht]
   \interaction{hook.msglen.go}
-  \caption{A hook that forbids overly short commit messages}
+  \caption{Un gancho que prohíbe mensajes de consignación demasiado
+  cortos}
   \label{ex:hook:msglen.go}
 \end{figure}
 
-\subsection{Checking for trailing whitespace}
+\subsection{Comprobar espacios en blanco finales}
 
-An interesting use of a commit-related hook is to help you to write
-cleaner code.  A simple example of ``cleaner code'' is the dictum that
-a change should not add any new lines of text that contain ``trailing
-whitespace''.  Trailing whitespace is a series of space and tab
-characters at the end of a line of text.  In most cases, trailing
-whitespace is unnecessary, invisible noise, but it is occasionally
-problematic, and people often prefer to get rid of it.
+Un uso interesante para ganchos relacionados con consignaciones es
+ayudarle a escribir código más limpio. Un ejemplo simple de
+%TODO dictum => regla
+``código más limpio'' es la regla de que un cambio no debe añadir
+líneas de texto que contengan ``espacios en blanco finales''. El
+espacio en blanco final es una serie de caracteres de espacio y
+tabulación que se encuentran al final de una línea de texto. En la
+mayoría de los casos, el espacio en blanco final es innecesario, ruido
+invisible, pero ocasionalmente es problemático, y la gente en general
+prefiere deshacerse de él.
 
-You can use either the \hook{precommit} or \hook{pretxncommit} hook to
-tell whether you have a trailing whitespace problem.  If you use the
-\hook{precommit} hook, the hook will not know which files you are
-committing, so it will have to check every modified file in the
-repository for trailing white space.  If you want to commit a change
-to just the file \filename{foo}, but the file \filename{bar} contains
-trailing whitespace, doing a check in the \hook{precommit} hook will
-prevent you from committing \filename{foo} due to the problem with
-\filename{bar}.  This doesn't seem right.
+Usted puede usar cualquiera de los ganchos \hook{precommit} o
+\hook{pretxncommit} para revisar si tiene el problema de los espacios
+en blanco finales. Si usa el gancho \hook{precommit}, el gancho no
+sabrá qué ficheros se están consignando, por lo que se tendrá que
+revisar cada fichero modificado en el repositorio para ver si tiene
+espacios en blanco finales. Si usted sólo quiere consignar un cambio
+al fichero \filename{foo}, y el fichero \filename{bar} contiene
+espacios en blanco finales, hacer la revisión en el gancho
+\hook{precommit} evitará que usted haga la consignación de
+\filename{foo} debido al problem en \filename{bar}.  Este no parece el
+enfoque adeucado.
 
-Should you choose the \hook{pretxncommit} hook, the check won't occur
-until just before the transaction for the commit completes.  This will
-allow you to check for problems only the exact files that are being
-committed.  However, if you entered the commit message interactively
-and the hook fails, the transaction will roll back; you'll have to
-re-enter the commit message after you fix the trailing whitespace and
-run \hgcmd{commit} again.
+Si usted escogiera el gancho \hook{pretxncommit}, la revisión no
+ocurriría sino hasta justo antes de que la transacción para la
+consignación se complete. Esto le permitirá comprobar por posibles
+problemas sólo en los ficheros que serán consignados. Sin embargo, si
+usted ingresó el mensaje de consignación de manera interactiva y el
+%TODO roll-back
+gancho falla, la transacción será deshecha; usted tendrá que
+reingresar el mensaje de consignación luego de que corrija el problema
+con los espacios en blanco finales y ejecute \hgcmd{commit} de nuevo.
 
 \begin{figure}[ht]
   \interaction{hook.ws.simple}
-  \caption{A simple hook that checks for trailing whitespace}
+  \caption{Un gancho simple que revisa si hay espacios en blanco
+  finales}
   \label{ex:hook:ws.simple}
 \end{figure}
 
-Figure~\ref{ex:hook:ws.simple} introduces a simple \hook{pretxncommit}
-hook that checks for trailing whitespace.  This hook is short, but not
-very helpful.  It exits with an error status if a change adds a line
-with trailing whitespace to any file, but does not print any
-information that might help us to identify the offending file or
-line.  It also has the nice property of not paying attention to
-unmodified lines; only lines that introduce new trailing whitespace
-cause problems.
+La figura~\ref{ex:hook:ws.simple} presenta un gancho
+\hook{pretxncommit} simple que comprueba la existencia de espacios en
+blanco finales. Este gancho es corto, pero no brinda mucha ayuda.
+Termina con un código de salida de error si un cambio añade una línea
+con espacio en blanco final a cualquier fichero, pero no muestra
+ninguna información que pueda ser útil para identificar el fichero o
+la línea de texto origen del problema. También tiene la agradable
+propiedad de no prestar atención a las líneas que no sufrieron
+modificaciones; sólo las líneas que introducen nuevos espacios en
+blanco finales causan problemas.
 
 \begin{figure}[ht]
   \interaction{hook.ws.better}
@@ -533,127 +555,148 @@ cause problems.
   \label{ex:hook:ws.better}
 \end{figure}
 
-The example of figure~\ref{ex:hook:ws.better} is much more complex,
-but also more useful.  It parses a unified diff to see if any lines
-add trailing whitespace, and prints the name of the file and the line
-number of each such occurrence.  Even better, if the change adds
-trailing whitespace, this hook saves the commit comment and prints the
-name of the save file before exiting and telling Mercurial to roll the
-transaction back, so you can use
-\hgcmdargs{commit}{\hgopt{commit}{-l}~\emph{filename}} to reuse the
-saved commit message once you've corrected the problem.
+El ejemplo de la figura~\ref{ex:hook:ws.better} es mucho más complejo,
+pero también más útil. El gancho procesa un diff unificado para
+revisar si alguna línea añade espacios en blanco finales, e imprime el
+nombre del fichero y el número de línea de cada ocurrencia. Aún mejor,
+si el cambio añade espacios en blanco finales, este gancho guarda el
+mensaje de consignación e imprime el nombre del fichero en el que el
+mensaje fue guardado, antes de terminar e indicarle a Mercurial que
+deshaga la transacción, para que uste pueda usar
+\hgcmdargs{commit}{\hgopt{commit}{-l}~\emph{nombre\_fichero}} para
+reutilizar el mensaje de consignación guardado anteriormente, una vez
+usted haya corregido el problema.
 
-As a final aside, note in figure~\ref{ex:hook:ws.better} the use of
-\command{perl}'s in-place editing feature to get rid of trailing
-whitespace from a file.  This is concise and useful enough that I will
-reproduce it here.
+Como anotación final, note en la figura~\ref{ex:hook:ws.better} el
+%TODO on-site => in-situ ?
+uso de la característica de edición \emph{in-situ} de \command{perl}
+para eliminar los espacios en blanco finales en un fichero. Esto es
+lo suficientemente conciso y poderoso para que lo presente aquí.
+% TODO corregí el backslash, y comprobé por mi cuenta un archivo
+% aparte, y el comando hace lo que debe hacer. Favor copiar del pdf el
+% comando perl y comprobar con un archivo con espacios en blanco
+% finales, y si todo está bien (que debería), borrar esta nota
 \begin{codesample2}
-  perl -pi -e 's,\\s+\$,,' filename
+    perl -pi -e 's,\textbackslash{}s+\$,,' nombre\_fichero
 \end{codesample2}
 
-\section{Bundled hooks}
+%TODO bundled
+\section{Ganchos bundled}
 
-Mercurial ships with several bundled hooks.  You can find them in the
-\dirname{hgext} directory of a Mercurial source tree.  If you are
-using a Mercurial binary package, the hooks will be located in the
-\dirname{hgext} directory of wherever your package installer put
+Mercurial se instala con varios ganchos bundled. Usted puede
+encontrarlos en el directorio \dirname{hgext} del árbol de ficheros
+fuente de Mercurial. Si usted está usando un paquete binario de
+Mercurial, los ganchos estarán ubicados en el directorio
+\dirname{hgext} en donde su instalador de paquetes haya puesto a
 Mercurial.
 
-\subsection{\hgext{acl}---access control for parts of a repository}
+\subsection{\hgext{acl}---control de acceso a partes de un repositorio}
 
-The \hgext{acl} extension lets you control which remote users are
-allowed to push changesets to a networked server.  You can protect any
-portion of a repository (including the entire repo), so that a
-specific remote user can push changes that do not affect the protected
-portion.
+La extensión \hgext{acl} le permite controlar a qué usuarios remotos
+les está permitido empujar conjuntos de cambios a un servidor en red.
+Usted puede proteger cualquier porción de un repositorio (incluyendo
+el repositorio completo), de tal manera que un usuario remoto
+específico pueda empujar cambios que no afecten la porción protegida.
 
-This extension implements access control based on the identity of the
-user performing a push, \emph{not} on who committed the changesets
-they're pushing.  It makes sense to use this hook only if you have a
-locked-down server environment that authenticates remote users, and
-you want to be sure that only specific users are allowed to push
-changes to that server.
+Esta extensión implementa control de acceso basado en la identidad del
+usuario que empuja los conjuntos de cambios, \emph{no} en la identidad
+de quien hizo la consignación de los mismos. Usar este gancho tiene
+sentido sólo si se tiene un servidor adecuadamente asegurado que
+autentique a los usuarios remotos, y si usted desea segurarse de que
+sólo se le permita a ciertos usuarios empujar cambios a dicho
+servidor.
 
-\subsubsection{Configuring the \hook{acl} hook}
+\subsubsection{Configurar el gancho \hook{acl}}
 
-In order to manage incoming changesets, the \hgext{acl} hook must be
-used as a \hook{pretxnchangegroup} hook.  This lets it see which files
-are modified by each incoming changeset, and roll back a group of
-changesets if they modify ``forbidden'' files.  Example:
+Para administrar los conjuntos de cambios entrantes, se debe usar el
+gancho \hgext{acl} como un gancho de tipo \hook{pretxnchangegroup}.
+Esto le permite ver qué ficheros son modificados por cada conjunto de
+%TODO rollback => "deshacer el efecto"
+cambios entrante, y deshacer el efecto de un grupo de conjuntos de
+cambios si alguno de ellos modifica algún fichero ``prohibido''.
+Ejemplo:
 \begin{codesample2}
   [hooks]
   pretxnchangegroup.acl = python:hgext.acl.hook
 \end{codesample2}
 
-The \hgext{acl} extension is configured using three sections.  
+La extensión \hgext{acl} es configurada mediante tres secciones.
 
-The \rcsection{acl} section has only one entry, \rcitem{acl}{sources},
-which lists the sources of incoming changesets that the hook should
-pay attention to.  You don't normally need to configure this section.
+La sección \rcsection{acl} sólo tiene una entrada,
+\rcitem{acl}{sources}\footnote{Fuentes.}, que lista las fuentes de los
+conjuntos de cambios entrantes a las que el gancho debe prestar
+atención. Usualmente usted no necesita configurar esta sección.
 \begin{itemize}
-\item[\rcitem{acl}{serve}] Control incoming changesets that are arriving
-  from a remote repository over http or ssh.  This is the default
-  value of \rcitem{acl}{sources}, and usually the only setting you'll
-  need for this configuration item.
-\item[\rcitem{acl}{pull}] Control incoming changesets that are
-  arriving via a pull from a local repository.
-\item[\rcitem{acl}{push}] Control incoming changesets that are
-  arriving via a push from a local repository.
-\item[\rcitem{acl}{bundle}] Control incoming changesets that are
-  arriving from another repository via a bundle.
+  \item[\rcitem{acl}{serve}] Controlar conjuntos de
+    cambios entrantes que están llegando desde un repositorio a
+    través de http o ssh. Este es el valor por defecto de
+  \rcitem{acl}{sources}, y usualmente es el único valor de
+  configuración que necesitará para este ítem.
+\item[\rcitem{acl}{pull}] Controlar conjuntos de cambios entrantes que
+  lleguen vía un pull (jalado) desde un repositorio local.
+\item[\rcitem{acl}{push}] Controlar conjuntos de cambios entrantes que
+  lleguen vía un push (empuje) desde un repositorio local.
+\item[\rcitem{acl}{bundle}] Controlar conjuntos de cambios entrantes
+    %TODO bundle
+  que lleguen desde otro repositorio a través de un bundle.
 \end{itemize}
 
-The \rcsection{acl.allow} section controls the users that are allowed to
-add changesets to the repository.  If this section is not present, all
-users that are not explicitly denied are allowed.  If this section is
-present, all users that are not explicitly allowed are denied (so an
-empty section means that all users are denied).
+La sección \rcsection{acl.allow} controla los usuarios a los que les
+está permitido añadir conjuntos de cambios al repositorio. Si esta
+sección no está presente, se le permite acceso a todos los usuarios
+excepto  a los que se les haya negado explícitamente el acceso. Si
+esta sección no está presente, se niega el acceso a todos los usuarios
+excepto a todos a los que se les haya permitido de manera explícita
+(así que una sección vacía implica que se niega el acceso a todos los
+usuarios).
 
-The \rcsection{acl.deny} section determines which users are denied
-from adding changesets to the repository.  If this section is not
-present or is empty, no users are denied.
+La sección \rcsection{acl.deny} determina a qué usuarios no se les
+permite añadir conjuntos de cambios al repositorio. Si esta sección no
+está presente o está vacía, no se niega el acceso a ningún usuario.
 
-The syntaxes for the \rcsection{acl.allow} and \rcsection{acl.deny}
-sections are identical.  On the left of each entry is a glob pattern
-that matches files or directories, relative to the root of the
-repository; on the right, a user name.
+La sintaxis para los ficheros \rcsection{acl.allow} y
+\rcsection{acl.deny} es idéntica. A la izquierda de cada entrada se
+encuentra un patrón glob que asocia ficheros o directorios, respecto a
+la raíz del repositorio; a la derecha, un nombre usuario.
 
-In the following example, the user \texttt{docwriter} can only push
-changes to the \dirname{docs} subtree of the repository, while
-\texttt{intern} can push changes to any file or directory except
-\dirname{source/sensitive}.
+En el siguiente ejemplo, el usuario \texttt{escritordoc} sólo puede
+empujar cambios al directorio \dirname{docs} del repositorio, mientras
+que \texttt{practicante} puede enviar cambios a cualquier fichero o
+directorio excepto \dirname{fuentes/sensitivo}.
 \begin{codesample2}
   [acl.allow]
-  docs/** = docwriter
+  docs/** = escritordoc
 
   [acl.deny]
-  source/sensitive/** = intern
+  fuentes/sensitivo/** = practicante
 \end{codesample2}
 
-\subsubsection{Testing and troubleshooting}
+\subsubsection{Pruebas y resolución de problemas}
 
-If you want to test the \hgext{acl} hook, run it with Mercurial's
-debugging output enabled.  Since you'll probably be running it on a
-server where it's not convenient (or sometimes possible) to pass in
-the \hggopt{--debug} option, don't forget that you can enable
-debugging output in your \hgrc:
+Si usted desea probar el gancho \hgext{acl}, ejecútelo habilitando la
+opción de salida de depuración habilitada. Ya que usted probablemente
+lo estará ejecutando en un servidor donde no es conveniente (o incluso
+posible) pasar la opción \hggopt{--debug}, no olvide que usted puede
+habilitar la salida de depuración en su \hgrc:
 \begin{codesample2}
   [ui]
   debug = true
 \end{codesample2}
-With this enabled, the \hgext{acl} hook will print enough information
-to let you figure out why it is allowing or forbidding pushes from
-specific users.
+Con esto habilitado, el gancho \hgext{acl} imprimirá suficiente
+información para permitirle saber porqué está permitiendo o denegando
+la operación de empujar a usuarios específicos.
 
-\subsection{\hgext{bugzilla}---integration with Bugzilla}
+\subsection{\hgext{bugzilla}---integración con Bugzilla}
 
-The \hgext{bugzilla} extension adds a comment to a Bugzilla bug
-whenever it finds a reference to that bug ID in a commit comment.  You
-can install this hook on a shared server, so that any time a remote
-user pushes changes to this server, the hook gets run.  
+La extensión \hgext{bugzilla} añade un comentario a un fallo Bugzilla
+siempre que encuentre una referencia al ID de dicho fallo en un
+mensaje de consignación. Usted puede instalar este gancho en un
+servidor compartido, para que cada vez que un usuario remoto empuje
+cambios al servidor, el gancho sea ejecutado.
 
-It adds a comment to the bug that looks like this (you can configure
-the contents of the comment---see below):
+Se añade un comentario al fallo que se ve así (usted puede configurar
+los contenidos del comentario---vea más abajo):
+%TODO traducir?
 \begin{codesample2}
   Changeset aad8b264143a, made by Joe User <joe.user@domain.com> in
   the frobnitz repository, refers to this bug.
@@ -664,155 +707,169 @@ the contents of the comment---see below):
   Changeset description:
         Fix bug 10483 by guarding against some NULL pointers
 \end{codesample2}
-The value of this hook is that it automates the process of updating a
-bug any time a changeset refers to it.  If you configure the hook
-properly, it makes it easy for people to browse straight from a
-Bugzilla bug to a changeset that refers to that bug.
+El valor de este gancho se encuentra en que automatiza el proceso de
+actualizar un fallo cuando un conjunto de cambios se refiera a él. Si
+usted configura este gancho adecuadamente, hará fácil para la gente
+navegar directamente desde un fallo Bugzilla a un conjunto de cambios
+que se refiere a ese fallo.
 
-You can use the code in this hook as a starting point for some more
-exotic Bugzilla integration recipes.  Here are a few possibilities:
+Usted puede usar el código de este gancho como un punto de partida
+para otras recetas de integración con Bugzilla aún más exóticas. Acá
+hay algunas posibilidades:
 \begin{itemize}
-\item Require that every changeset pushed to the server have a valid
-  bug~ID in its commit comment.  In this case, you'd want to configure
-  the hook as a \hook{pretxncommit} hook.  This would allow the hook
-  to reject changes that didn't contain bug IDs.
-\item Allow incoming changesets to automatically modify the
-  \emph{state} of a bug, as well as simply adding a comment.  For
-  example, the hook could recognise the string ``fixed bug 31337'' as
-  indicating that it should update the state of bug 31337 to
-  ``requires testing''.
+\item Requerir que cada conjunto de cambios tenga un ID de fallo en su
+  mensaje de consignación. En este caso, usted querrá configurar el
+  gancho como uno de tipo \hook{pretxncommit}.  Esto le permitirá al
+  gancho rechazar cambios que no contiene IDs de fallos.
+\item Permitir a los conjuntos de cambios entrantes modificar
+  automáticamente el \emph{estado} de un fallo, así como simplemente
+  añadir un comentario. Por ejemplo, el gancho podría reconocer la
+  cadena ``corregido fallo 31337'' como la señal de que debería
+  actualizar el estado del fallo 31337 a ``requiere pruebas''.
 \end{itemize}
 
-\subsubsection{Configuring the \hook{bugzilla} hook}
+\subsubsection{Configuración del gancho \hook{bugzilla}}
 \label{sec:hook:bugzilla:config}
 
-You should configure this hook in your server's \hgrc\ as an
-\hook{incoming} hook, for example as follows:
+Usted debería configurar este gancho en el \hgrc\ de su servidor como
+un gancho \hook{incoming}\footnote{Entrante.}, por ejemplo como sigue:
 \begin{codesample2}
   [hooks]
   incoming.bugzilla = python:hgext.bugzilla.hook
 \end{codesample2}
 
-Because of the specialised nature of this hook, and because Bugzilla
-was not written with this kind of integration in mind, configuring
-this hook is a somewhat involved process.
+Debido a la naturaleza especializada de este gancho, y porque Bugzilla
+no fue escrito con este tipo de integración en mente, configurar este
+% TODO involved => complejo ? no intarwebs here :(
+gancho es un proceso algo complejo.
 
-Before you begin, you must install the MySQL bindings for Python on
-the host(s) where you'll be running the hook.  If this is not
-available as a binary package for your system, you can download it
-from~\cite{web:mysql-python}.
+Antes de empezar, usted debe instalar la interfaz de Python para MySQL
+en los sistemas en los que se vaya a ejecutar el gancho. Si no está
+disponible como paquete binario para su sistema, usted puede descargar
+el paquete desde~\cite{web:mysql-python}.
 
-Configuration information for this hook lives in the
-\rcsection{bugzilla} section of your \hgrc.
+La información para configurar este gancho se ubica en la sección 
+\rcsection{bugzilla} de su \hgrc.
 \begin{itemize}
-\item[\rcitem{bugzilla}{version}] The version of Bugzilla installed on
-  the server.  The database schema that Bugzilla uses changes
-  occasionally, so this hook has to know exactly which schema to use.
-  At the moment, the only version supported is \texttt{2.16}.
-\item[\rcitem{bugzilla}{host}] The hostname of the MySQL server that
-  stores your Bugzilla data.  The database must be configured to allow
-  connections from whatever host you are running the \hook{bugzilla}
-  hook on.
-\item[\rcitem{bugzilla}{user}] The username with which to connect to
-  the MySQL server.  The database must be configured to allow this
-  user to connect from whatever host you are running the
-  \hook{bugzilla} hook on.  This user must be able to access and
-  modify Bugzilla tables.  The default value of this item is
-  \texttt{bugs}, which is the standard name of the Bugzilla user in a
-  MySQL database.
-\item[\rcitem{bugzilla}{password}] The MySQL password for the user you
-  configured above.  This is stored as plain text, so you should make
-  sure that unauthorised users cannot read the \hgrc\ file where you
-  store this information.
-\item[\rcitem{bugzilla}{db}] The name of the Bugzilla database on the
-  MySQL server.  The default value of this item is \texttt{bugs},
-  which is the standard name of the MySQL database where Bugzilla
-  stores its data.
-\item[\rcitem{bugzilla}{notify}] If you want Bugzilla to send out a
-  notification email to subscribers after this hook has added a
-  comment to a bug, you will need this hook to run a command whenever
-  it updates the database.  The command to run depends on where you
-  have installed Bugzilla, but it will typically look something like
-  this, if you have Bugzilla installed in
-  \dirname{/var/www/html/bugzilla}:
+\item[\rcitem{bugzilla}{version}] La versión de Bugzilla instalada en
+  el servidor. El esquema de base de datos que Bugzilla usa cambia
+  ocasionalmente, así que este gancho debe saber exactamente qué
+  esquema usar. A la fecha, la única versión soportada es la
+  \texttt{2.16}.
+\item[\rcitem{bugzilla}{host}] El nombre de máquina (\emph{hostname})
+  del servidor MySQL que almacena sus datos Bugzilla. La base de datos
+  debe ser configurada para permitir conexiones desde las máquinas en
+  las que usted ejecute el gancho \hook{bugzilla}.
+\item[\rcitem{bugzilla}{user}] El nombre de usuario que se usará para
+  conectarse al servidor MySQL. La base de datos debe ser configurada
+  para permitir a dicho usuario conectarse desde cualquiera de las
+  máquinas en las que se ejecute el gancho \hook{bugzilla}.  Este
+  usuario debe tener acceso y poder modificar las tablas de Bugzilla.
+  El valor por defecto para este ítem es \texttt{bugs}, que es el
+  nombre estándar del usuario para Bugzilla en una base de datos
+  MySQL.
+\item[\rcitem{bugzilla}{password}] La contraseña MySQL para el usuario
+  configurado anteriormente. Ésta es almacenada como texto plano, así
+  que usted deberá asegurarse de que los usuarios no autorizados no
+  puedan leer el fichero \hgrc\ en donde usted guarda esta
+  información.
+\item[\rcitem{bugzilla}{db}] El nombre de la base de datos Bugzilla en
+  el servidor MySQL. El nombre por defecto para este ítem es
+  \texttt{bugs}, que es el nombre estándar de la base de datos MySQL
+  en donde Bugzilla almacena sus datos.
+\item[\rcitem{bugzilla}{notify}] Si usted desea que Bugzilla envíe un
+    %TODO suBscriptores?
+  correo de notificación a los suscriptores después de que el gancho
+  haya añadido un comentario a un fallo, necesitará que este gancho
+  ejecute un comando siempre que actualice la base de datos. El
+  comando que se ejecute depende de en dónde haya sido instalado
+  Bugzilla, pero típicamente se verá así, si usted ha instalado
+  Bugzilla en \dirname{/var/www/html/bugzilla}:
   \begin{codesample4}
     cd /var/www/html/bugzilla && ./processmail %s nobody@nowhere.com
   \end{codesample4}
-  The Bugzilla \texttt{processmail} program expects to be given a
-  bug~ID (the hook replaces ``\texttt{\%s}'' with the bug~ID) and an
-  email address.  It also expects to be able to write to some files in
-  the directory that it runs in.  If Bugzilla and this hook are not
-  installed on the same machine, you will need to find a way to run
-  \texttt{processmail} on the server where Bugzilla is installed.
+  El programa \texttt{processmail} de Bugzilla espera recibir un ID de
+  fallo (el gancho reemplaza ``\texttt{\%s}'' por el ID del fallo) y
+  una dirección de correo. También espera poder escribir a ciertos
+  ficheros en el directorio en que se ejecuta. Si Bugzilla y éste
+  gancho no están instalados en la misma máquina, usted deberá
+  encontrar una manera de ejecutar \texttt{processmail} en el servidor
+  donde está instalado Bugzilla.
 \end{itemize}
 
-\subsubsection{Mapping committer names to Bugzilla user names}
+\subsubsection{Asociar nombres de consignadores a nombres de usuario
+Bugzilla}
 
-By default, the \hgext{bugzilla} hook tries to use the email address
-of a changeset's committer as the Bugzilla user name with which to
-update a bug.  If this does not suit your needs, you can map committer
-email addresses to Bugzilla user names using a \rcsection{usermap}
-section.
+Por defecto, el gancho \hgext{bugzilla} trata de usar la dirección de
+correo electrónico de la persona que hizo la consignación del conjunto
+de cambios como el nombre de usuario Bugzilla con el cual debe
+actualizar el fallo. Si esto no se ajusta a sus necesidades, es
+posible asociar direcciones de correo a nombres de usuario Bugzilla
+usando una sección \rcsection{usermap}.
 
-Each item in the \rcsection{usermap} section contains an email address
-on the left, and a Bugzilla user name on the right.
+Cada ítem en la sección \rcsection{usermap} contiene una dirección de
+correo electrónico a la izquierda, y un nombre de usuario Bugzilla a
+la derecha.
 \begin{codesample2}
   [usermap]
   jane.user@example.com = jane
 \end{codesample2}
-You can either keep the \rcsection{usermap} data in a normal \hgrc, or
-tell the \hgext{bugzilla} hook to read the information from an
-external \filename{usermap} file.  In the latter case, you can store
-\filename{usermap} data by itself in (for example) a user-modifiable
-repository.  This makes it possible to let your users maintain their
-own \rcitem{bugzilla}{usermap} entries.  The main \hgrc\ file might
-look like this:
+Usted puede mantener los datos de \rcsection{usermap} en un fichero
+\hgrc, o decirle al gancho \hgext{bugzilla} que lea la información
+desde un fichero \filename{usermap} externo.  En este caso, usted
+puede almacenar los datos de \filename{usermap} en (por ejemplo) un
+repositorio modificable por los usuarios. Esto hace posible para sus
+usuarios mantener sus propias entradas \rcitem{bugzilla}{usermap}.  El
+fichero \hgrc\ principal se vería así:
 \begin{codesample2}
-  # regular hgrc file refers to external usermap file
+  # fichero hgrc normal se refiere a un fichero usermap externo
   [bugzilla]
   usermap = /home/hg/repos/userdata/bugzilla-usermap.conf
 \end{codesample2}
-While the \filename{usermap} file that it refers to might look like
-this:
+Mientras que el fichero \filename{usermap} al que se hace referencia
+se vería así:
 \begin{codesample2}
-  # bugzilla-usermap.conf - inside a hg repository
+  # bugzilla-usermap.conf - dentro de un repositorio hg
   [usermap]
   stephanie@example.com = steph
 \end{codesample2}
 
-\subsubsection{Configuring the text that gets added to a bug}
+\subsubsection{Configurar el texto que se añade a un fallo}
 
-You can configure the text that this hook adds as a comment; you
-specify it in the form of a Mercurial template.  Several \hgrc\
-entries (still in the \rcsection{bugzilla} section) control this
-behaviour.
+Usted puede configurar el texto que este gancho añade como comentario;
+usted los especifica como una plantilla Mercurial. Varias entradas
+\hgrc\ (aún en la sección \rcsection{bugzilla}) controlan este
+comportamiento.
 \begin{itemize}
-\item[\texttt{strip}] The number of leading path elements to strip
-  from a repository's path name to construct a partial path for a URL.
-  For example, if the repositories on your server live under
-  \dirname{/home/hg/repos}, and you have a repository whose path is
-  \dirname{/home/hg/repos/app/tests}, then setting \texttt{strip} to
-  \texttt{4} will give a partial path of \dirname{app/tests}.  The
-  hook will make this partial path available when expanding a
-  template, as \texttt{webroot}.
-\item[\texttt{template}] The text of the template to use.  In addition
-  to the usual changeset-related variables, this template can use
-  \texttt{hgweb} (the value of the \texttt{hgweb} configuration item
-  above) and \texttt{webroot} (the path constructed using
-  \texttt{strip} above).
+\item[\texttt{strip}] La cantidad de elementos iniciales de ruta a
+  remover de un nombre de ruta del repositorio para construir una ruta
+  parcial para una URL. Por ejemplo, si los repositorios en su
+  servidor se ubican en \dirname{/home/hg/repos}, y usted tiene un
+  repositorio cuya ruta es \dirname{/home/hg/repos/app/tests},
+  entonces fijar \texttt{strip} a \texttt{4} resultará en una ruta
+  parcial de \dirname{app/tests}.  El gancho hará disponible esta ruta
+  parcial cuando expanda una plantilla, como \texttt{webroot}.
+\item[\texttt{template}] El texto de la plantilla a usar. En adición a
+  las variables usuales relacionadas con conjuntos de cambios, esta
+  plantilla puede usar \texttt{hgweb} (el valor del ítem de
+  configuración \texttt{hgweb} de arriba) y \texttt{webroot} (la ruta
+  construida usando \texttt{strip} arriba).
 \end{itemize}
 
-In addition, you can add a \rcitem{web}{baseurl} item to the
-\rcsection{web} section of your \hgrc.  The \hgext{bugzilla} hook will
-make this available when expanding a template, as the base string to
-use when constructing a URL that will let users browse from a Bugzilla
-comment to view a changeset.  Example:
+Adicionalmente, usted puede añadir un ítem \rcitem{web}{baseurl} a la
+sección \rcsection{web} de su \hgrc.  El gancho \hgext{bugzilla}
+publicará esto cuando expanda una plantilla, como la cadena base a
+usar cuando se construya una URL que le permita a los usuarios navegar
+desde un comentario de Bugzilla a la vista de un conjunto de cambios.
+Ejemplo:
 \begin{codesample2}
   [web]
   baseurl = http://hg.domain.com/
 \end{codesample2}
 
-Here is an example set of \hgext{bugzilla} hook config information.
+A continuación se presenta un ejemplo completo de configuración para
+el gancho \hgext{bugzilla}.
+%TODO traducir?
 \begin{codesample2}
   [bugzilla]
   host = bugzilla.example.com
@@ -829,13 +886,15 @@ Here is an example set of \hgext{bugzilla} hook config information.
     description:\\n\\t\{desc|tabindent\}
 \end{codesample2}
 
-\subsubsection{Testing and troubleshooting}
+\subsubsection{Pruebas y resolución de problemas}
 
-The most common problems with configuring the \hgext{bugzilla} hook
-relate to running Bugzilla's \filename{processmail} script and mapping
-committer names to user names.
+Los problemas más comunes que aparecen en la configuración del gancho
+\hgext{bugzilla} suelen estar relacionados con la ejecución del guión
+de Bugzilla \filename{processmail} y la asociación de nombres de
+consignadores a nombres de usuario.
 
-Recall from section~\ref{sec:hook:bugzilla:config} above that the user
+Recuerde que en la sección~\ref{sec:hook:bugzilla:config} arriba que
+el usuario que ejecuta el proceso Mercurial en el servidor es también 
 that runs the Mercurial process on the server is also the one that
 will run the \filename{processmail} script.  The
 \filename{processmail} script sometimes causes Bugzilla to write to
@@ -987,12 +1046,13 @@ This will produce a message that looks like the following:
   [...snip...]
 \end{codesample2}
 
-\subsubsection{Testing and troubleshooting}
+\subsubsection{Pruebas y resolución de problemas}
 
-Do not forget that by default, the \hgext{notify} extension \emph{will
-  not send any mail} until you explicitly configure it to do so, by
-setting \rcitem{notify}{test} to \texttt{false}.  Until you do that,
-it simply prints the message it \emph{would} send.
+No olvide que por defecto, la extensión \hgext{notify} \emph{no
+enviará ningún correo electrónico} hasta que usted la configure
+explícitamente para hacerlo, fijando el valor de \rcitem{notify}{test}
+a \texttt{false}.  Hasta que usted haga eso, simplemente se imprimirá
+el mensaje que se \emph{enviaría}.
 
 \section{Information for writers of hooks}
 \label{sec:hook:ref}
