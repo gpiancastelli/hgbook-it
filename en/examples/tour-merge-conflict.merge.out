@@ -1,4 +1,6 @@
 $ \textbf{export HGMERGE=merge}
+$ \textbf{echo 'XXX this is broken and must be fixed'}
+XXX this is broken and must be fixed
 $ \textbf{hg merge}
 merging letter.txt
 merge: warning: conflicts during merge

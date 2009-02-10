@@ -9,8 +9,7 @@ create a new repository in the given directory
     If no directory is given, the current directory is used.
 
     It is possible to specify an ssh:// URL as the destination.
-    Look at the help text for the pull command for important details
-    about ssh:// URLs.
+    See 'hg help urls' for more information.
 
 options:
 
